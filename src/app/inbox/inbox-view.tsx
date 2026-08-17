@@ -3,10 +3,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import type { UserRole } from "@/lib/auth";
 import type { InboxConversationDto, InboxMessageDto, InboxSnapshotDto } from "@/lib/inbox";
 
 type InboxViewProps = {
   pollSeconds: number;
+  role: UserRole;
   managerCode?: string;
 };
 
@@ -23,11 +25,28 @@ function formatTime(iso: string): string {
   });
 }
 
-export function InboxView({ pollSeconds, managerCode }: InboxViewProps) {
+function mergeMessages(
+  server: InboxMessageDto[],
+  previous: InboxMessageDto[],
+): InboxMessageDto[] {
+  const optimistic = previous.filter((item) => item.id.startsWith("tmp-"));
+  const leftover = optimistic.filter(
+    (item) =>
+      !server.some(
+        (message) => message.direction === "outbound" && message.bodyText === item.bodyText,
+      ),
+  );
+  return [...server, ...leftover];
+}
+
+export function InboxView({ pollSeconds, role, managerCode }: InboxViewProps) {
   const [conversations, setConversations] = useState<InboxConversationDto[]>([]);
   const [messages, setMessages] = useState<InboxMessageDto[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [draft, setDraft] = useState("");
+  const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const canReply = role === "manager";
 
   const load = useCallback(async () => {
     if (document.visibilityState !== "visible") {
@@ -55,7 +74,7 @@ export function InboxView({ pollSeconds, managerCode }: InboxViewProps) {
       return;
     }
     if (selectedId) {
-      setMessages(body.messages);
+      setMessages((previous) => mergeMessages(body.messages, previous));
     }
   }, [managerCode, selectedId]);
 
@@ -80,6 +99,61 @@ export function InboxView({ pollSeconds, managerCode }: InboxViewProps) {
   const selected = conversations.find((item) => item.id === selectedId) ?? null;
   const emptyList = conversations.length === 0;
 
+  async function onSend() {
+    if (!selected || !canReply || sending) {
+      return;
+    }
+    const bodyText = draft.trim();
+    if (!bodyText) {
+      setError("Введите текст ответа");
+      return;
+    }
+
+    const tempId = `tmp-${crypto.randomUUID()}`;
+    const optimistic: InboxMessageDto = {
+      id: tempId,
+      conversationId: selected.id,
+      direction: "outbound",
+      fromEmail: "",
+      toEmail: selected.clientEmail,
+      subject: selected.subject.startsWith("Re:") ? selected.subject : `Re: ${selected.subject}`,
+      bodyText,
+      sentAt: new Date().toISOString(),
+      createdAt: new Date().toISOString(),
+    };
+    setMessages((current) => [...current, optimistic]);
+    setDraft("");
+    setSending(true);
+    setError(null);
+
+    try {
+      const response = await fetch(`/api/conversations/${selected.id}/messages`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ bodyText }),
+      });
+      const payload = (await response.json().catch(() => ({}))) as {
+        error?: string;
+        message?: InboxMessageDto;
+      };
+      if (!response.ok || !payload.message) {
+        setMessages((current) => current.filter((item) => item.id !== tempId));
+        setDraft(bodyText);
+        setError(payload.error ?? "Не удалось отправить письмо");
+        return;
+      }
+      setMessages((current) =>
+        current.map((item) => (item.id === tempId ? payload.message! : item)),
+      );
+    } catch {
+      setMessages((current) => current.filter((item) => item.id !== tempId));
+      setDraft(bodyText);
+      setError("Не удалось отправить письмо");
+    } finally {
+      setSending(false);
+    }
+  }
+
   return (
     <div className="grid min-h-0 flex-1 grid-cols-1 md:grid-cols-[20rem_1fr]">
       <aside className="border-b border-border bg-card/40 p-5 md:border-r md:border-b-0">
@@ -97,6 +171,7 @@ export function InboxView({ pollSeconds, managerCode }: InboxViewProps) {
                     onClick={() => {
                       setSelectedId(item.id);
                       setMessages([]);
+                      setDraft("");
                     }}
                     className={`pressable w-full rounded-lg px-3 py-2 text-left ${
                       active ? "bg-accent ring-1 ring-primary/40" : "hover:bg-muted/50"
@@ -139,9 +214,14 @@ export function InboxView({ pollSeconds, managerCode }: InboxViewProps) {
                 messages.map((message) => (
                   <article
                     key={message.id}
-                    className="max-w-[42rem] rounded-xl border border-border bg-card px-4 py-3"
+                    className={`max-w-[42rem] rounded-xl border border-border px-4 py-3 ${
+                      message.direction === "outbound"
+                        ? "ml-auto bg-primary/10"
+                        : "bg-card"
+                    }`}
                   >
                     <div className="mb-2 text-xs text-muted-foreground">
+                      {message.direction === "outbound" ? "Исходящее" : "Входящее"} ·{" "}
                       {message.subject} · {formatTime(message.sentAt)}
                     </div>
                     <p className="whitespace-pre-wrap text-sm">{message.bodyText}</p>
@@ -151,24 +231,35 @@ export function InboxView({ pollSeconds, managerCode }: InboxViewProps) {
             </div>
           )}
         </div>
-        <div className="space-y-3 border-t border-border bg-card/30 p-4">
-          <Textarea
-            disabled
-            placeholder="Ответ клиенту"
-            aria-label="Ответ клиенту"
-          />
-          <div className="flex flex-wrap items-center gap-2">
-            <Button disabled title="отправка будет позже">
-              Отправить
-            </Button>
-            <Button variant="outline" disabled title="отправка будет позже">
-              Подобрать решение
-            </Button>
-            <span className="text-sm text-muted-foreground">
-              {emptyList ? "писем ещё нет" : "отправка будет позже"}
-            </span>
+        {canReply ? (
+          <div className="space-y-3 border-t border-border bg-card/30 p-4">
+            <Textarea
+              disabled={!selected || sending}
+              value={draft}
+              onChange={(event) => setDraft(event.target.value)}
+              placeholder="Ответ клиенту"
+              aria-label="Ответ клиенту"
+            />
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                disabled={!selected || sending || !draft.trim()}
+                onClick={() => void onSend()}
+              >
+                Отправить
+              </Button>
+              <Button variant="outline" disabled title="подбор будет позже">
+                Подобрать решение
+              </Button>
+              <span className="text-sm text-muted-foreground">
+                {selected ? "ответ уйдёт на почту клиента" : "выберите клиента"}
+              </span>
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="border-t border-border bg-card/30 p-4 text-sm text-muted-foreground">
+            Главный не отвечает клиентам.
+          </div>
+        )}
       </section>
     </div>
   );
