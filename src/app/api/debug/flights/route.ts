@@ -1,9 +1,14 @@
 import { NextResponse } from "next/server";
+import { requireApiSession } from "@/lib/auth-http";
 import { prisma } from "@/lib/db";
 import { parseDebugFlightsQuery } from "@/lib/travel/debug-query";
 
-// TODO(stage 02): закрыть этот debug-эндпоинт или пускать только роль chief.
 export async function GET(request: Request) {
+  const auth = await requireApiSession(request, "/api/debug/flights");
+  if ("response" in auth) {
+    return auth.response;
+  }
+
   const parsed = parseDebugFlightsQuery(new URL(request.url).searchParams);
   if (!parsed.ok) {
     return NextResponse.json({ error: parsed.message }, { status: 400 });

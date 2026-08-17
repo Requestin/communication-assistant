@@ -21,6 +21,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "dotenv": "^17.4.2",
+    "jose": "^6.2.9",
     "lucide-react": "^1.31.0",
     "next": "15.5.23",
     "prisma": "^6.19.3",
