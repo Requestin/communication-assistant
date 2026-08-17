@@ -1,0 +1,10 @@
+node_modules
+.next
+.git
+.env
+.env.local
+gmail_imap_test.py
+docs/plans
+coverage
+*.md
+!README.md

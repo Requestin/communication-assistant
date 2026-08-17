@@ -64,20 +64,23 @@
 
 ## Команды
 
-Пока этап 0 не влит, каркаса нет. На этапе 0 агент **заменяет этот блок** реальными командами.
-
-Заглушка (ожидаемый вид после этапа 0):
+Только этот репозиторий и его compose. Не останавливать mapvideo. Порты: сайт 3010, наша БД 5433.
 
 ```bash
 npm install
-npm run lint
-npm test
-docker compose up -d db
-npx prisma migrate deploy
-npx prisma db seed
-```
+cp .env.example .env   # локально, не коммитить; задать POSTGRES_PASSWORD и SESSION_SECRET
 
-После появления скриптов — вызывать именно их, не выдумывать другие имена.
+# Только наша Postgres (127.0.0.1:5433). Не трогает mapvideo на 5432.
+docker compose up -d db
+
+npm run db:migrate     # prisma migrate deploy
+npm run db:seed        # четыре пользователя
+npm run lint
+npm test               # vitest: юнит сида + проверка users в БД
+npm run dev            # http://127.0.0.1:3010
+npm run build
+docker compose up --build -d web   # заглушка сайта, 127.0.0.1:3010
+```
 
 ## Тест-гейт
 
