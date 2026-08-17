@@ -836,7 +836,7 @@ returnFlights = то же на dateTo, города наоборот, если n
 
 ## 10. Экраны и «почти мгновенное» обновление
 
-Интерфейс на русском. shadcn/ui: Sidebar, Button, Card, Badge, Table, Textarea, Tabs, Separator.
+Интерфейс на русском. shadcn/ui: Sidebar, Button, Card, Badge, Table, Textarea, Tabs, Separator. Тёмная тема, шрифты и motion описаны в [DESIGN.md](DESIGN.md).
 
 ### 10.1. `/login`
 
@@ -1160,6 +1160,15 @@ User.code M65 → …
 - `/admin` каркас с нулями.
 
 **Готово когда:** можно войти четырьмя людьми и не увидеть чужой пункт меню.
+
+### Этап 2.1. Тёмная тема, шрифты и правила UI
+
+Файл этапа: [docs/stages/02-1-ui-update.md](docs/stages/02-1-ui-update.md)
+
+- `DESIGN.md`, скиллы в `.cursor/skills/`.
+- Тёмная тема (тёплый графит, янтарь), Golos Text и Unbounded.
+
+**Готово когда:** вход, инбокс и админка тёмные; человек написал «тёмная тема ок».
 
 ### Этап 3. IMAP
 

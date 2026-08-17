@@ -9,9 +9,15 @@
 - [§2.2](../../ARCHITECTURE.md#22-сценарий-a-клиент-написал-на-почту) — сценарий
 
 Ветка: `stage/03-imap`  
-База: `main` после этапа 2  
-Зависимость: [02-auth-inbox.md](02-auth-inbox.md) влит в `main`  
+База: `main` после этапа 2.1  
+Зависимость: [02-1-ui-update.md](02-1-ui-update.md) влит в `main`  
 PR: `[stage 03] Воркер IMAP и появление входящих в ленте`
+
+## Скиллы
+
+- Почта: `mail-privacy` (+ `comm-ui` на ленте)
+- Смена `/api/*`: `api-contract-checker`
+- Перед PR: `testing-reviewer` + `code-reviewer`
 
 ## Цель простыми словами
 

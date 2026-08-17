@@ -9,10 +9,26 @@
 | Документ | Роль |
 | --- | --- |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Источник правды по **продукту** |
+| [DESIGN.md](DESIGN.md) | Источник правды по **визуалу** |
 | [docs/stages/](docs/stages/README.md) | Источник правды по **текущему этапу** |
 | Этот файл + `.cursor/rules/` | Источник правды по **процессу** |
 
 Не копировать архитектуру сюда. Ссылаться на разделы.
+
+## Скиллы
+
+Лежат в `.cursor/skills/`. Читать до работы, не после.
+
+| Когда | Скиллы |
+| --- | --- |
+| Любой `*.tsx` | `frontend-design` + `comm-ui` |
+| Красные тесты или баг | `systematic-debugging` |
+| Перед каждым PR | `testing-reviewer` + `code-reviewer` |
+| Смена `/api/*` | `api-contract-checker` |
+| Этапы 3–4 | `mail-privacy` (+ `comm-ui` на ленте) |
+| Этапы 5–6 | `local-llm-json` + `comm-ui` |
+| Этап 7 | UI-скиллы; Recharts без кислотных градиентов |
+| Этап 8 | `frontend-design` + `comm-ui` |
 
 ## Mapvideo главнее этого пилота
 
@@ -24,7 +40,7 @@
 - останавливать, перезапускать, удалять, переименовывать контейнеры и процессы mapvideo (`mapvideo-frontend`, `mapvideo-backend`, `mapvideo-postgres`, `mapvideo-martin`, `mapvideo-osrm` и любые другие с этим именем);
 - занимать порты mapvideo: **3000, 3001, 3002, 5432, 5000** и прочие, которые он уже слушает;
 - команды вроде `docker compose down` / `docker stop` / `docker rm` / `docker system prune` / правка общесерверного nginx или systemd, если есть шанс задеть mapvideo;
-- убивать чужие GPU-процессы или забирать всю видеопамять так, что mapvideo падает.
+- убивать процессы mapvideo. **GPU (RTX 5090) целиком наш** — mapvideo карту не использует; его процессы всё равно не убивать.
 
 Разрешено только своё: каталог `/root/communication-assistant` (и его git), свои контейнеры этого compose, порты **3010, 5433, 8088**.
 
