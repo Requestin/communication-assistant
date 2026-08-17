@@ -1,0 +1,9 @@
+From: Иван Клиент <imap-test-client@example.com>
+To: communicationassistant36@gmail.com
+Subject: Тест IMAP
+Date: Tue, 18 Aug 2026 00:00:00 +0000
+Message-ID: <inbound-plain@example.com>
+MIME-Version: 1.0
+Content-Type: text/plain; charset=utf-8
+
+Нужно оформить командировку для двух сотрудников в Санкт-Петербург из Москвы с 01.09 по 05.09

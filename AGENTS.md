@@ -94,8 +94,10 @@ npm run db:seed        # четыре пользователя
 npm run lint
 npm test               # vitest: юнит сида + проверка users в БД
 npm run dev            # http://127.0.0.1:3010
+npm run worker         # IMAP-воркер на хосте, БД 127.0.0.1:5433
 npm run build
-docker compose up --build -d web   # заглушка сайта, 127.0.0.1:3010
+docker compose up --build -d web   # сайт, 127.0.0.1:3010
+docker compose up --build -d worker   # только наш воркер, без портов
 ```
 
 ## Тест-гейт

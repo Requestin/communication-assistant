@@ -1,0 +1,9 @@
+From: Анна Соколова <communicationassistant36@gmail.com>
+To: client@example.com
+Subject: Наш ответ
+Date: Tue, 18 Aug 2026 02:00:00 +0000
+Message-ID: <from-self@example.com>
+MIME-Version: 1.0
+Content-Type: text/plain; charset=utf-8
+
+Это исходящее, его не нужно импортировать.

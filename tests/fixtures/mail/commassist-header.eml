@@ -1,0 +1,10 @@
+From: Иван Клиент <imap-test-header@example.com>
+To: communicationassistant36@gmail.com
+Subject: Повтор из SMTP
+Date: Tue, 18 Aug 2026 03:00:00 +0000
+Message-ID: <commassist-header@example.com>
+X-CommAssist: 1
+MIME-Version: 1.0
+Content-Type: text/plain; charset=utf-8
+
+Это наше исходящее с сайта.
