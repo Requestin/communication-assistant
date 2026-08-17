@@ -1,0 +1,236 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  manager
+  chief
+}
+
+enum MessageDirection {
+  inbound
+  outbound
+}
+
+enum AiNoteType {
+  quality_hint
+  travel_offer
+}
+
+enum JobType {
+  evaluate_quality
+  suggest_travel
+}
+
+enum JobStatus {
+  pending
+  processing
+  done
+  failed
+}
+
+enum RoomType {
+  standard
+  twin
+}
+
+model User {
+  id        String   @id @default(uuid())
+  code      String   @unique
+  name      String
+  role      UserRole
+  email     String?  @unique
+  createdAt DateTime @default(now())
+
+  clients       Client[]
+  conversations Conversation[]
+  qualityScores QualityScore[]
+  mailCursor    MailCursor?
+
+  @@map("users")
+}
+
+model Client {
+  id          String   @id @default(uuid())
+  managerId   String
+  email       String
+  displayName String
+  createdAt   DateTime @default(now())
+
+  manager       User           @relation(fields: [managerId], references: [id], onDelete: Cascade)
+  conversations Conversation[]
+
+  @@unique([managerId, email])
+  @@map("clients")
+}
+
+model Conversation {
+  id            String   @id @default(uuid())
+  managerId     String
+  clientId      String
+  subject       String
+  lastMessageAt DateTime
+
+  manager  User      @relation(fields: [managerId], references: [id], onDelete: Cascade)
+  client   Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  messages Message[]
+  aiNotes  AiNote[]
+  jobs     Job[]
+
+  @@unique([managerId, clientId])
+  @@map("conversations")
+}
+
+model Message {
+  id             String            @id @default(uuid())
+  conversationId String
+  direction      MessageDirection
+  fromEmail      String
+  toEmail        String
+  subject        String
+  bodyText       String
+  sentAt         DateTime
+  gmailUid       String?
+  gmailMessageId String?
+  smtpMessageId  String?
+  createdAt      DateTime          @default(now())
+
+  conversation  Conversation   @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  qualityScore  QualityScore?
+  aiNotes       AiNote[]
+  jobs          Job[]
+
+  @@unique([toEmail, gmailUid])
+  @@index([conversationId, sentAt])
+  @@map("messages")
+}
+
+model AiNote {
+  id             String     @id @default(uuid())
+  conversationId String
+  messageId      String?
+  type           AiNoteType
+  title          String
+  body           String
+  payload        Json
+  visibleToRoles String[]   @default(["manager", "chief"])
+  createdAt      DateTime   @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  message      Message?     @relation(fields: [messageId], references: [id], onDelete: SetNull)
+
+  @@map("ai_notes")
+}
+
+model QualityScore {
+  id            String   @id @default(uuid())
+  messageId     String   @unique
+  managerId     String
+  literacy      Int
+  spelling      Int
+  punctuation   Int
+  businessStyle Int
+  overall       Decimal  @db.Decimal(3, 2)
+  issues        Json
+  showHint      Boolean
+  createdAt     DateTime @default(now())
+
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  manager User    @relation(fields: [managerId], references: [id], onDelete: Cascade)
+
+  @@map("quality_scores")
+}
+
+model Job {
+  id             String    @id @default(uuid())
+  type           JobType
+  status         JobStatus @default(pending)
+  conversationId String
+  messageId      String?
+  payload        Json
+  error          String?
+  attempts       Int       @default(0)
+  createdAt      DateTime  @default(now())
+  startedAt      DateTime?
+  finishedAt     DateTime?
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  message      Message?     @relation(fields: [messageId], references: [id], onDelete: SetNull)
+
+  @@map("jobs")
+}
+
+model MailCursor {
+  userId    String   @id
+  lastUid   Int
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("mail_cursors")
+}
+
+model City {
+  id        String   @id
+  name      String
+  iataCity  String
+  timezone  String
+  aliases   String[]
+  tier      Int
+
+  hotels         Hotel[]
+  originFlights  Flight[] @relation("FlightOrigin")
+  destFlights    Flight[] @relation("FlightDest")
+
+  @@map("cities")
+}
+
+model Flight {
+  id           String   @id @default(uuid())
+  flightNo     String
+  airline      String
+  originCityId String
+  destCityId   String
+  departAt     DateTime
+  arriveAt     DateTime
+  priceRub     Int
+  seatsLeft    Int
+
+  origin City @relation("FlightOrigin", fields: [originCityId], references: [id])
+  dest   City @relation("FlightDest", fields: [destCityId], references: [id])
+
+  @@index([originCityId, destCityId, departAt])
+  @@index([departAt])
+  @@map("flights")
+}
+
+model Hotel {
+  id     String @id @default(uuid())
+  cityId String
+  name   String
+  stars  Int
+
+  city         City                @relation(fields: [cityId], references: [id])
+  availability HotelAvailability[]
+
+  @@map("hotels")
+}
+
+model HotelAvailability {
+  id               String   @id @default(uuid())
+  hotelId          String
+  date             DateTime @db.Date
+  roomType         RoomType
+  roomsLeft        Int
+  pricePerNightRub Int
+
+  hotel Hotel @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+
+  @@unique([hotelId, date, roomType])
+  @@map("hotel_availability")
+}
