@@ -1,0 +1,118 @@
+import { ImapFlow } from "imapflow";
+import type { PrismaClient } from "@prisma/client";
+import { ingestInbound, ingestLogLine } from "./ingest";
+import { parseEml } from "./parse";
+import { imapSettings, type MailboxAccount } from "./accounts";
+import { initialLastUid } from "./cursor";
+
+type ConnectedBox = {
+  account: MailboxAccount;
+  client: ImapFlow;
+};
+
+function safeError(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message.replace(/password[=:]\s*\S+/gi, "password=***");
+  }
+  return "unknown error";
+}
+
+export async function connectMailbox(account: MailboxAccount): Promise<ImapFlow> {
+  const { host, port } = imapSettings();
+  const client = new ImapFlow({
+    host,
+    port,
+    secure: true,
+    auth: { user: account.email, pass: account.password },
+    logger: false,
+    disableAutoIdle: true,
+  });
+  await client.connect();
+  return client;
+}
+
+export async function closeMailbox(client: ImapFlow | null): Promise<void> {
+  if (!client) {
+    return;
+  }
+  try {
+    await client.logout();
+  } catch {
+    try {
+      client.close();
+    } catch {
+      // already closed
+    }
+  }
+}
+
+async function saveCursor(prisma: PrismaClient, userId: string, lastUid: number): Promise<void> {
+  await prisma.mailCursor.upsert({
+    where: { userId },
+    create: { userId, lastUid },
+    update: { lastUid },
+  });
+}
+
+export async function pollMailbox(
+  prisma: PrismaClient,
+  account: MailboxAccount,
+  userId: string,
+  connected: ConnectedBox | null,
+): Promise<ConnectedBox> {
+  let client = connected?.client ?? null;
+  if (!client || client.usable === false) {
+    await closeMailbox(client);
+    client = await connectMailbox(account);
+  }
+
+  const lock = await client.getMailboxLock("INBOX");
+  try {
+    const existing = await prisma.mailCursor.findUnique({ where: { userId } });
+    const lastUid = initialLastUid(existing?.lastUid, client.mailbox?.uidNext ?? 1);
+    if (!existing) {
+      console.info(`[imap:${account.code}] first start, catch-up after uid=${lastUid}`);
+    }
+
+    let maxSeen = lastUid;
+    const found = await client.search({ uid: `${lastUid + 1}:*` }, { uid: true });
+    const uids = (found || []).filter((uid) => uid > lastUid);
+
+    for await (const message of uids.length
+      ? client.fetch(uids, { uid: true, source: true }, { uid: true })
+      : []) {
+      const uid = Number(message.uid);
+      if (!Number.isFinite(uid) || uid <= lastUid) {
+        continue;
+      }
+      maxSeen = Math.max(maxSeen, uid);
+      if (!message.source) {
+        continue;
+      }
+
+      try {
+        const parsed = await parseEml(message.source);
+        const input = {
+          managerId: userId,
+          managerEmail: account.email,
+          gmailUid: String(uid),
+          parsed,
+        };
+        const result = await ingestInbound(prisma, input);
+        console.info(`[imap:${account.code}] ${ingestLogLine(input, result)}`);
+      } catch (error) {
+        console.error(`[imap:${account.code}] failed uid=${uid}: ${safeError(error)}`);
+      }
+    }
+
+    if (maxSeen > lastUid) {
+      await saveCursor(prisma, userId, maxSeen);
+    }
+  } finally {
+    lock.release();
+  }
+
+  return { account, client };
+}
+
+export { safeError };
