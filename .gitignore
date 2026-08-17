@@ -1,0 +1,8 @@
+/gmail_imap_test.py
+.env
+.env.local
+.env.*.local
+node_modules/
+.next/
+dist/
+/docs/plans
