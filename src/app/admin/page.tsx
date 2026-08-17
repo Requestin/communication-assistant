@@ -32,7 +32,7 @@ export default async function AdminPage() {
     <div className="flex min-h-screen flex-col">
       <AppHeader name={session.name} role={session.role} />
       <main className="mx-auto flex w-full max-w-5xl flex-col gap-8 p-6">
-        <h1 className="text-2xl font-medium">Админка</h1>
+        <h1 className="text-3xl font-medium tracking-tight">Админка</h1>
 
         <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <Card>
@@ -95,7 +95,7 @@ export default async function AdminPage() {
           {["Средняя оценка", "Динамика оценки", "Число подсказок"].map((title) => (
             <div
               key={title}
-              className="flex h-40 items-center justify-center rounded-xl bg-muted text-center text-sm text-muted-foreground"
+              className="flex h-40 items-center justify-center rounded-xl border border-border bg-card text-center text-sm text-muted-foreground"
             >
               {title}: появится после писем
             </div>

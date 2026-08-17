@@ -21,30 +21,35 @@ export function AppHeader({ name, role }: AppHeaderProps) {
   }
 
   return (
-    <header className="flex items-center justify-between gap-4 border-b px-6 py-3">
-      <div className="flex items-center gap-4">
-        <Link href={role === "chief" ? "/admin" : "/inbox"} className="font-medium">
-          Помощник в коммуникации
-        </Link>
-        {role === "chief" ? (
-          <nav className="flex items-center gap-3 text-sm">
-            <Link href="/admin" className="text-muted-foreground hover:text-foreground">
-              Админка
-            </Link>
-            <Link href="/inbox" className="text-muted-foreground hover:text-foreground">
-              Инбокс
-            </Link>
-          </nav>
-        ) : null}
-      </div>
-      <div className="flex items-center gap-3">
-        <div className="text-right text-sm">
-          <div className="font-medium">{name}</div>
-          <div className="text-muted-foreground">{roleLabel(role)}</div>
+    <header className="border-b border-border bg-card/80 px-6 py-3 backdrop-blur-md">
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center gap-5">
+          <Link
+            href={role === "chief" ? "/admin" : "/inbox"}
+            className="font-heading text-sm tracking-tight"
+          >
+            Помощник в коммуникации
+          </Link>
+          {role === "chief" ? (
+            <nav className="flex items-center gap-3 text-sm">
+              <Link href="/admin" className="text-muted-foreground transition-colors hover:text-primary">
+                Админка
+              </Link>
+              <Link href="/inbox" className="text-muted-foreground transition-colors hover:text-primary">
+                Инбокс
+              </Link>
+            </nav>
+          ) : null}
         </div>
-        <Button variant="outline" onClick={onLogout}>
-          Выйти
-        </Button>
+        <div className="flex items-center gap-3">
+          <div className="text-right text-sm">
+            <div className="font-medium">{name}</div>
+            <div className="text-muted-foreground">{roleLabel(role)}</div>
+          </div>
+          <Button variant="outline" className="pressable" onClick={onLogout}>
+            Выйти
+          </Button>
+        </div>
       </div>
     </header>
   );

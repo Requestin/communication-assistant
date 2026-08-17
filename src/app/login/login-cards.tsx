@@ -37,23 +37,24 @@ export function LoginCards({ users }: { users: PublicUser[] }) {
   return (
     <div className="flex flex-col gap-6">
       <div className="grid gap-4 sm:grid-cols-2">
-        {users.map((user) => (
+        {users.map((user, index) => (
           <button
             key={user.id}
             type="button"
             disabled={pendingId !== null}
             onClick={() => onLogin(user.id)}
-            className="text-left"
+            className="login-card-enter pressable text-left"
+            style={{ animationDelay: `${index * 40}ms` }}
           >
-            <Card className="h-full transition-colors hover:bg-muted/40">
+            <Card className="h-full ring-1 ring-foreground/8 hover:ring-primary/40">
               <CardHeader>
-                <CardTitle>{user.name}</CardTitle>
+                <CardTitle className="font-heading text-xl">{user.name}</CardTitle>
                 <CardDescription>{roleLabel(user.role)}</CardDescription>
               </CardHeader>
               <CardContent className="text-sm text-muted-foreground">
                 {user.email ?? "без почты"}
                 {pendingId === user.id ? (
-                  <div className="mt-2 text-foreground">Входим…</div>
+                  <div className="mt-2 text-primary">Входим…</div>
                 ) : null}
               </CardContent>
             </Card>

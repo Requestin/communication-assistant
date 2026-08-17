@@ -11,6 +11,7 @@
 | 0. Каркас | `stage/00-skeleton` | [00-skeleton.md](00-skeleton.md) | Postgres поднят, миграции применены, в `users` 4 строки |
 | 1. Справочник РФ | `stage/01-travel-catalog` | [01-travel-catalog.md](01-travel-catalog.md) | Десятки тысяч рейсов, инвариант MOW–LED зелёный |
 | 2. Вход и пустой инбокс | `stage/02-auth-inbox` | [02-auth-inbox.md](02-auth-inbox.md) | Четыре человека входят, чужое меню не видно |
+| 2.1. Тёмная тема и шрифты | `stage/02-1-ui-update` | [02-1-ui-update.md](02-1-ui-update.md) | Тёмная тема и шрифты, человек сказал ок |
 | 3. IMAP | `stage/03-imap` | [03-imap.md](03-imap.md) | Письмо на M36 появляется у Анны за ≤20 с |
 | 4. Ответ с сайта | `stage/04-smtp` | [04-smtp.md](04-smtp.md) | Ответ с сайта доходит клиенту, chief не шлёт |
 | 5. Агент качества | `stage/05-quality-agent` | [05-quality-agent.md](05-quality-agent.md) | Плохой ответ даёт жёлтую карточку |
