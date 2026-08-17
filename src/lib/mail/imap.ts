@@ -3,6 +3,7 @@ import type { PrismaClient } from "@prisma/client";
 import { ingestInbound, ingestLogLine } from "./ingest";
 import { parseEml } from "./parse";
 import { imapSettings, type MailboxAccount } from "./accounts";
+import { initialLastUid } from "./cursor";
 
 type ConnectedBox = {
   account: MailboxAccount;
@@ -68,10 +69,9 @@ export async function pollMailbox(
   const lock = await client.getMailboxLock("INBOX");
   try {
     const existing = await prisma.mailCursor.findUnique({ where: { userId } });
-    const lastUid =
-      existing?.lastUid ?? Math.max(0, (client.mailbox?.uidNext ?? 1) - 1);
+    const lastUid = initialLastUid(existing?.lastUid, client.mailbox?.uidNext ?? 1);
     if (!existing) {
-      await saveCursor(prisma, userId, lastUid);
+      console.info(`[imap:${account.code}] first start, catch-up after uid=${lastUid}`);
     }
 
     let maxSeen = lastUid;
