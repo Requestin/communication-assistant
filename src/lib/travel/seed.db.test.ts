@@ -25,7 +25,7 @@ describe.skipIf(!prisma)("travel seed against Postgres", () => {
       expect(second.flights).toBe(first.flights);
       expect(second.cities).toBe(22);
       expect(second.flights).toBeGreaterThanOrEqual(25_000);
-      expect(second.availability).toBeGreaterThanOrEqual(20_000);
+      expect(second.availability).toBeGreaterThanOrEqual(40_000);
 
       await assertTravelInvariantsFromDb(prisma);
 

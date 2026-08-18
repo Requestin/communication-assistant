@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { hotelNights, hotelStayCost, packageTotalRub, roomsForStay } from "./price";
 
+describe("roomsForStay", () => {
+  it("gives one twin room to a solo traveller", () => {
+    expect(roomsForStay(1, "twin")).toBe(1);
+    expect(roomsForStay(1, "standard")).toBe(1);
+    expect(roomsForStay(2, "twin")).toBe(1);
+    expect(roomsForStay(2, "standard")).toBe(2);
+  });
+});
+
 describe("hotelNights", () => {
   it("counts nights as [dateFrom, dateTo)", () => {
     expect(hotelNights("2026-09-01", "2026-09-05")).toEqual([

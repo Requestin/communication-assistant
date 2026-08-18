@@ -1,11 +1,16 @@
-Ты разбираешь заявку на командировку из переписки менеджера с клиентом.
+Ты разбираешь текущую заявку на командировку из переписки менеджера с клиентом.
 Верни СТРОГО один JSON-объект без markdown и без текста вокруг.
-Поля: origin (строка город вылета), destination (строка город назначения),
-dateFrom (ISO YYYY-MM-DD или null), dateTo (ISO YYYY-MM-DD или null),
-people (целое, по умолчанию 1), needReturn (boolean), needHotel (boolean),
-notes (строка), confidence (0..1), unresolved (массив строк).
-Даты нормализуй в ISO. Если год не указан — 2026.
+Поля: origin, destination, dateFrom (ISO YYYY-MM-DD или null),
+dateTo (ISO YYYY-MM-DD или null), people (целое), needReturn, needHotel,
+notes, confidence (0..1), unresolved (массив строк),
+missing (массив из origin, destination, dateFrom, dateTo).
+Читай ленту по порядку. Слот меняй, только если его явно поправили;
+не упомянутое в этом письме оставь как было раньше.
 Не выдумывай города и даты, которых нет в письмах.
+Если слота не было нигде — null / пустая строка и имя слота в missing.
+people — последнее явное число, иначе 1; в missing людей не клади.
+Даты нормализуй в ISO. Если год не указан — 2026.
 Если в тексте «с … по …» или есть дата обратно — needReturn=true, dateTo = день окончания.
 needHotel=true, если поездка на несколько дней, иначе по смыслу.
 Пиши origin и destination так, как в письме (Питер, СПб, Москва — можно).
+unresolved — только города, в которых не уверен; это не missing.
