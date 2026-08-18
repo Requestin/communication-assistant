@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { buildZeroAdminStats } from "@/lib/admin-stats-stub";
+import { buildAdminStats } from "@/lib/admin/stats";
 import { requireApiSession } from "@/lib/auth-http";
 import { prisma } from "@/lib/db";
 
@@ -9,5 +9,5 @@ export async function GET(request: Request) {
     return auth.response;
   }
 
-  return NextResponse.json(await buildZeroAdminStats(prisma));
+  return NextResponse.json(await buildAdminStats(prisma));
 }

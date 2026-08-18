@@ -1,21 +1,22 @@
+import dynamic from "next/dynamic";
 import { redirect } from "next/navigation";
 import { AppHeader } from "@/components/app-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { buildZeroAdminStats } from "@/lib/admin-stats-stub";
+import { formatHintRate, formatScore } from "@/lib/admin/format";
+import { buildAdminStats } from "@/lib/admin/stats";
 import { getSessionFromCookies } from "@/lib/auth-server";
 import { prisma } from "@/lib/db";
+import { AdminManagers } from "./admin-managers";
 
-function formatScore(value: number | null): string {
-  return value === null ? "—" : String(value);
-}
+const AdminCharts = dynamic(
+  () => import("./admin-charts").then((mod) => mod.AdminCharts),
+  {
+    ssr: false,
+    loading: () => (
+      <p className="text-sm text-muted-foreground">Графики появятся после загрузки.</p>
+    ),
+  },
+);
 
 export default async function AdminPage() {
   const session = await getSessionFromCookies();
@@ -26,26 +27,31 @@ export default async function AdminPage() {
     redirect("/inbox");
   }
 
-  const stats = await buildZeroAdminStats(prisma);
+  const stats = await buildAdminStats(prisma);
 
   return (
     <div className="flex min-h-screen flex-col">
       <AppHeader name={session.name} role={session.role} />
-      <main className="mx-auto flex w-full max-w-5xl flex-col gap-8 p-6">
-        <h1 className="text-3xl font-medium tracking-tight">Админка</h1>
+      <main className="mx-auto flex w-full max-w-6xl flex-col gap-8 p-6">
+        <div>
+          <h1 className="font-heading text-3xl tracking-tight">Админка</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Оценки исходящих писем и подборы по отделу. Клиент эти цифры не видит.
+          </p>
+        </div>
 
         <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <Card>
             <CardHeader>
               <CardTitle>Ответы отдела</CardTitle>
             </CardHeader>
-            <CardContent className="text-2xl">{stats.department.replies}</CardContent>
+            <CardContent className="font-heading text-2xl tabular-nums">{stats.department.replies}</CardContent>
           </Card>
           <Card>
             <CardHeader>
               <CardTitle>Средняя оценка</CardTitle>
             </CardHeader>
-            <CardContent className="text-2xl">
+            <CardContent className="font-heading text-2xl tabular-nums">
               {formatScore(stats.department.avgScore)}
             </CardContent>
           </Card>
@@ -53,54 +59,20 @@ export default async function AdminPage() {
             <CardHeader>
               <CardTitle>Доля с подсказкой</CardTitle>
             </CardHeader>
-            <CardContent className="text-2xl">{stats.department.hintRate}</CardContent>
+            <CardContent className="font-heading text-2xl tabular-nums">
+              {formatHintRate(stats.department.hintRate)}
+            </CardContent>
           </Card>
           <Card>
             <CardHeader>
               <CardTitle>Подборы</CardTitle>
             </CardHeader>
-            <CardContent className="text-2xl">{stats.department.suggestions}</CardContent>
+            <CardContent className="font-heading text-2xl tabular-nums">{stats.department.suggestions}</CardContent>
           </Card>
         </section>
 
-        <section className="space-y-3">
-          <h2 className="text-lg font-medium">Менеджеры</h2>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Имя</TableHead>
-                <TableHead>Ответы</TableHead>
-                <TableHead>Оценка</TableHead>
-                <TableHead>Подсказка</TableHead>
-                <TableHead>Подборы</TableHead>
-                <TableHead>Клиенты</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {stats.managers.map((manager) => (
-                <TableRow key={manager.id}>
-                  <TableCell>{manager.name}</TableCell>
-                  <TableCell>{manager.replies}</TableCell>
-                  <TableCell>{formatScore(manager.avgScore)}</TableCell>
-                  <TableCell>{manager.hintRate}</TableCell>
-                  <TableCell>{manager.suggestions}</TableCell>
-                  <TableCell>{manager.clients}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </section>
-
-        <section className="grid gap-4 md:grid-cols-3">
-          {["Средняя оценка", "Динамика оценки", "Число подсказок"].map((title) => (
-            <div
-              key={title}
-              className="flex h-40 items-center justify-center rounded-xl border border-border bg-card text-center text-sm text-muted-foreground"
-            >
-              {title}: появится после писем
-            </div>
-          ))}
-        </section>
+        <AdminManagers managers={stats.managers} />
+        <AdminCharts charts={stats.charts} />
       </main>
     </div>
   );

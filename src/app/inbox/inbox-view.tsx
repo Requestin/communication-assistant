@@ -18,6 +18,8 @@ type InboxViewProps = {
   pollSeconds: number;
   role: UserRole;
   managerCode?: string;
+  managerName?: string;
+  initialConversationId?: string;
 };
 
 function formatTime(iso: string): string {
@@ -70,12 +72,18 @@ function buildTimeline(messages: InboxMessageDto[], notes: InboxNoteDto[]): Time
   return items;
 }
 
-export function InboxView({ pollSeconds, role, managerCode }: InboxViewProps) {
+export function InboxView({
+  pollSeconds,
+  role,
+  managerCode,
+  managerName,
+  initialConversationId,
+}: InboxViewProps) {
   const [conversations, setConversations] = useState<InboxConversationDto[]>([]);
   const [messages, setMessages] = useState<InboxMessageDto[]>([]);
   const [notes, setNotes] = useState<InboxNoteDto[]>([]);
   const [jobs, setJobs] = useState<InboxSuggestJobDto[]>([]);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(initialConversationId ?? null);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [suggesting, setSuggesting] = useState(false);
@@ -105,6 +113,10 @@ export function InboxView({ pollSeconds, role, managerCode }: InboxViewProps) {
     const body = (await response.json()) as InboxSnapshotDto;
     setError(null);
     setConversations(body.conversations);
+    if (selectedId && !body.conversations.some((item) => item.id === selectedId)) {
+      setSelectedId(body.conversations[0]?.id ?? null);
+      return;
+    }
     if (!selectedId && body.conversations[0]) {
       setSelectedId(body.conversations[0].id);
       return;
@@ -227,6 +239,17 @@ export function InboxView({ pollSeconds, role, managerCode }: InboxViewProps) {
   }
 
   return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      {managerName ? (
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-card/70 px-6 py-2 text-sm">
+          <p>
+            Лента: <span className="font-heading">{managerName}</span>
+          </p>
+          <a href="/admin" className="text-primary hover:underline">
+            Назад в админку
+          </a>
+        </div>
+      ) : null}
     <div className="grid min-h-0 flex-1 grid-cols-1 md:grid-cols-[20rem_1fr]">
       <aside className="border-b border-border bg-card/40 p-5 md:border-r md:border-b-0">
         <h2 className="mb-3 text-sm font-medium text-muted-foreground">Диалоги</h2>
@@ -368,6 +391,7 @@ export function InboxView({ pollSeconds, role, managerCode }: InboxViewProps) {
           </div>
         </div>
       </section>
+    </div>
     </div>
   );
 }
