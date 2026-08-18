@@ -136,11 +136,33 @@
   transform: translateY(0);
 }
 
+.busy-dot {
+  display: inline-block;
+  width: 0.55rem;
+  height: 0.55rem;
+  margin-right: 0.4rem;
+  border-radius: 999px;
+  background: var(--primary);
+  animation: busy-pulse 900ms ease-in-out infinite;
+  vertical-align: middle;
+}
+
+@keyframes busy-pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .login-card-enter,
   .pressable,
   .pressable:hover,
-  .pressable:active {
+  .pressable:active,
+  .busy-dot {
     animation: none;
     transition: none;
     transform: none;

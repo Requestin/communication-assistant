@@ -27,7 +27,9 @@ export default async function LoginPage() {
         </p>
       </div>
       {ordered.length === 0 ? (
-        <p>Нет пользователей, выполните `npm run db:seed`.</p>
+        <p className="rounded-xl border border-dashed border-border px-4 py-6 text-muted-foreground">
+          Пользователей нет. На сервере выполните сид: npm run db:seed.
+        </p>
       ) : (
         <LoginCards users={ordered.map(toPublicUser)} />
       )}

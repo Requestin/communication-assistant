@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import type { UserRole } from "@/lib/auth";
 import type {
+  InboxAlertDto,
   InboxConversationDto,
   InboxMessageDto,
   InboxNoteDto,
@@ -83,6 +84,7 @@ export function InboxView({
   const [messages, setMessages] = useState<InboxMessageDto[]>([]);
   const [notes, setNotes] = useState<InboxNoteDto[]>([]);
   const [jobs, setJobs] = useState<InboxSuggestJobDto[]>([]);
+  const [alerts, setAlerts] = useState<InboxAlertDto[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(initialConversationId ?? null);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
@@ -125,6 +127,7 @@ export function InboxView({
       setMessages((previous) => mergeMessages(body.messages, previous));
       setNotes(body.notes);
       setJobs(body.jobs ?? []);
+      setAlerts(body.alerts ?? []);
     }
   }, [managerCode, selectedId]);
 
@@ -254,7 +257,12 @@ export function InboxView({
       <aside className="border-b border-border bg-card/40 p-5 md:border-r md:border-b-0">
         <h2 className="mb-3 text-sm font-medium text-muted-foreground">Диалоги</h2>
         {emptyList ? (
-          <p className="text-sm text-muted-foreground">Список пуст.</p>
+          <div className="rounded-xl border border-dashed border-border bg-background/40 px-3 py-4">
+            <p className="font-heading text-sm">Клиентов пока нет</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Письмо на ваш Gmail появится здесь само, обычно за несколько секунд.
+            </p>
+          </div>
         ) : (
           <ul className="flex flex-col gap-1">
             {conversations.map((item) => {
@@ -268,6 +276,7 @@ export function InboxView({
                       setMessages([]);
                       setNotes([]);
                       setJobs([]);
+                      setAlerts([]);
                       setDraft("");
                       setSuggesting(false);
                     }}
@@ -293,11 +302,11 @@ export function InboxView({
           {!selected ? (
             <div className="flex flex-1 items-center justify-center text-center">
               <div className="max-w-md space-y-2">
-                <p className="font-heading text-lg">{emptyList ? "Лента пуста" : "Выберите диалог"}</p>
+                <p className="font-heading text-lg">{emptyList ? "Ждём первое письмо" : "Выберите диалог"}</p>
                 <p className="text-muted-foreground">
                   {emptyList
-                    ? "Писем ещё нет. Клиент должен написать на ваш Gmail."
-                    : "Слева список диалогов по темам писем."}
+                    ? "Клиент пишет на ваш рабочий Gmail. Здесь не дыра и не ошибка — просто ещё нет переписки."
+                    : "Слева диалоги по темам писем. Одна тема — одна лента."}
                 </p>
               </div>
             </div>
@@ -309,7 +318,9 @@ export function InboxView({
                 <p className="text-sm text-muted-foreground">{selected.clientEmail}</p>
               </div>
               {threadEmpty ? (
-                <p className="text-sm text-muted-foreground">Писем в этой ленте пока нет.</p>
+                <p className="rounded-xl border border-dashed border-border px-4 py-3 text-sm text-muted-foreground">
+                  В этой ленте пока нет писем.
+                </p>
               ) : (
                 timeline.map((item) =>
                   item.kind === "note" ? (
@@ -341,12 +352,27 @@ export function InboxView({
                   ),
                 )
               )}
+              {alerts.map((alert) => (
+                <div
+                  key={alert.kind}
+                  role="status"
+                  className={`w-full rounded-xl border px-4 py-3 text-sm ${
+                    alert.kind.endsWith("_failed")
+                      ? "border-destructive/40 bg-destructive/10"
+                      : "border-primary/45 bg-primary/12"
+                  }`}
+                >
+                  {alert.kind === "quality_pending" ? <span className="busy-dot" aria-hidden /> : null}
+                  {alert.message}
+                </div>
+              ))}
               {travelBusy ? (
                 <div
                   role="status"
                   aria-live="polite"
                   className="w-full rounded-xl border border-primary/45 bg-primary/12 px-4 py-3 text-sm"
                 >
+                  <span className="busy-dot" aria-hidden />
                   ИИ подбирает варианты…
                 </div>
               ) : null}
@@ -371,7 +397,14 @@ export function InboxView({
                 disabled={!selected || sending || !draft.trim()}
                 onClick={() => void onSend()}
               >
-                Отправить
+                {sending ? (
+                  <>
+                    <span className="busy-dot" aria-hidden />
+                    Отправляю…
+                  </>
+                ) : (
+                  "Отправить"
+                )}
               </Button>
             ) : null}
             <Button
@@ -379,7 +412,14 @@ export function InboxView({
               disabled={!selected || travelBusy}
               onClick={() => void onSuggest()}
             >
-              Подобрать решение
+              {travelBusy ? (
+                <>
+                  <span className="busy-dot" aria-hidden />
+                  ИИ думает…
+                </>
+              ) : (
+                "Подобрать решение"
+              )}
             </Button>
             <span className="text-sm text-muted-foreground">
               {selected

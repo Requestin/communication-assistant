@@ -72,6 +72,7 @@ async function pollMailboxLoop(): Promise<void> {
 }
 
 async function main(): Promise<void> {
+  console.info("[worker] started");
   const moved = await rehomeMessagesByThread(prisma);
   if (moved > 0) {
     console.info(`[worker] split ${moved} messages into subject threads`);
