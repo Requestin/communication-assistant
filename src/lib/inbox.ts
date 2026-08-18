@@ -44,11 +44,17 @@ export type InboxSuggestJobDto = {
   status: "pending" | "processing";
 };
 
+export type InboxAlertDto = {
+  kind: "quality_pending" | "quality_failed" | "suggest_failed";
+  message: string;
+};
+
 export type InboxSnapshotDto = {
   conversations: InboxConversationDto[];
   messages: InboxMessageDto[];
   notes: InboxNoteDto[];
   jobs: InboxSuggestJobDto[];
+  alerts: InboxAlertDto[];
 };
 
 const PREVIEW_LEN = 160;
@@ -123,6 +129,26 @@ export function toSuggestJobDto(job: Pick<Job, "id" | "type" | "status">): Inbox
   return { id: job.id, type: job.type, status: job.status };
 }
 
+export function staffAlertsFromJobs(
+  jobs: Array<{ type: Job["type"]; status: Job["status"] }>,
+): InboxAlertDto[] {
+  const latestQuality = jobs.find((job) => job.type === "evaluate_quality");
+  const latestSuggest = jobs.find((job) => job.type === "suggest_travel");
+  const alerts: InboxAlertDto[] = [];
+  if (latestQuality?.status === "pending" || latestQuality?.status === "processing") {
+    alerts.push({ kind: "quality_pending", message: "ИИ оценивает ответ…" });
+  } else if (latestQuality?.status === "failed") {
+    alerts.push({ kind: "quality_failed", message: "Не удалось оценить ответ" });
+  }
+  if (latestSuggest?.status === "failed") {
+    alerts.push({
+      kind: "suggest_failed",
+      message: "Не удалось подобрать варианты. ИИ недоступен.",
+    });
+  }
+  return alerts;
+}
+
 export async function buildInboxSnapshot(
   prisma: PrismaClient,
   options: {
@@ -150,15 +176,15 @@ export async function buildInboxSnapshot(
   }));
 
   if (!options.conversationId) {
-    return { conversations: conversationDtos, messages: [], notes: [], jobs: [] };
+    return { conversations: conversationDtos, messages: [], notes: [], jobs: [], alerts: [] };
   }
 
   const owned = conversations.some((item) => item.id === options.conversationId);
   if (!owned) {
-    return { conversations: conversationDtos, messages: [], notes: [], jobs: [] };
+    return { conversations: conversationDtos, messages: [], notes: [], jobs: [], alerts: [] };
   }
 
-  const [messages, notes, jobs] = await Promise.all([
+  const [messages, notes, jobs, latestJobs] = await Promise.all([
     prisma.message.findMany({
       where: {
         conversationId: options.conversationId,
@@ -182,6 +208,11 @@ export async function buildInboxSnapshot(
       orderBy: { createdAt: "asc" },
       select: { id: true, type: true, status: true },
     }),
+    prisma.job.findMany({
+      where: { conversationId: options.conversationId },
+      orderBy: { createdAt: "desc" },
+      select: { type: true, status: true },
+    }),
   ]);
 
   return {
@@ -192,5 +223,6 @@ export async function buildInboxSnapshot(
       const dto = toSuggestJobDto(job);
       return dto ? [dto] : [];
     }),
+    alerts: staffAlertsFromJobs(latestJobs),
   };
 }

@@ -236,4 +236,43 @@ describe.skipIf(!prisma)("GET /api/inbox/snapshot", () => {
       { id: job.id, type: "suggest_travel", status: "pending" },
     ]);
   });
+
+  it("returns a Russian quality-failed alert without the job error payload", async () => {
+    const inbound = await ingestInbound(prisma!, {
+      managerId: annaId,
+      managerEmail: "communicationassistant36@gmail.com",
+      gmailUid: "2301",
+      parsed: parseMailFields({
+        fromEmail: "imap-test-fail@example.com",
+        fromName: "Клиент",
+        subject: "Оценка",
+        text: "Нужна командировка",
+      }),
+    });
+    if (inbound.status !== "created") {
+      throw new Error("failed to seed thread");
+    }
+    await prisma!.job.create({
+      data: {
+        type: "evaluate_quality",
+        status: "failed",
+        conversationId: inbound.conversationId,
+        payload: {},
+        error: "ECONNREFUSED 127.0.0.1:8088 secret=should-not-leak",
+      },
+    });
+
+    const cookie = cookieHeader(await loginAs(annaId));
+    const thread = await snapshot(
+      new Request(
+        `http://127.0.0.1:3010/api/inbox/snapshot?conversationId=${inbound.conversationId}`,
+        { headers: { cookie } },
+      ),
+    );
+    const body = (await thread.json()) as InboxSnapshotDto;
+    expect(body.alerts).toEqual([
+      { kind: "quality_failed", message: "Не удалось оценить ответ" },
+    ]);
+    expect(JSON.stringify(body)).not.toMatch(/ECONNREFUSED|secret=/);
+  });
 });

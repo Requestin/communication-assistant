@@ -27,6 +27,9 @@ export default async function AdminPage() {
           <h1 className="font-heading text-3xl tracking-tight">Админка</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             Оценки исходящих писем и подборы по отделу. Клиент эти цифры не видит.
+            {stats.department.replies === 0
+              ? " Пока ответов нет — нули здесь нормальны, не ошибка."
+              : null}
           </p>
         </div>
 
