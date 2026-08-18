@@ -1,4 +1,5 @@
 import type { PrismaClient } from "@prisma/client";
+import { bucketScoreTrend } from "./trend";
 
 export type AdminDepartmentStats = {
   replies: number;
@@ -16,6 +17,7 @@ export type AdminManagerRow = AdminDepartmentStats & {
 
 export type AdminCharts = {
   scoreByManager: Array<{ name: string; code: string; avgScore: number | null }>;
+  overallSeries: Array<{ at: string; overall: number }>;
   overallByDay: Array<{ date: string; avgScore: number }>;
   hintsByManager: Array<{ name: string; code: string; hints: number }>;
 };
@@ -150,16 +152,17 @@ export async function buildAdminStats(prisma: PrismaClient): Promise<AdminStatsP
     suggestions: offers.length,
   };
 
-  const byDay = new Map<string, number[]>();
-  for (const row of scoresForCharts) {
-    const date = row.createdAt.toISOString().slice(0, 10);
-    const bucket = byDay.get(date) ?? [];
-    bucket.push(decimalToNumber(row.overall));
-    byDay.set(date, bucket);
-  }
-  const overallByDay = [...byDay.entries()].map(([date, values]) => ({
-    date,
-    avgScore: averageOverall(values) ?? 0,
+  const samples = scoresForCharts.map((row) => ({
+    at: row.createdAt,
+    overall: decimalToNumber(row.overall),
+  }));
+  const overallSeries = samples.map((sample) => ({
+    at: sample.at.toISOString(),
+    overall: sample.overall,
+  }));
+  const overallByDay = bucketScoreTrend(samples, "day").map((point) => ({
+    date: point.key,
+    avgScore: point.score,
   }));
 
   return {
@@ -171,6 +174,7 @@ export async function buildAdminStats(prisma: PrismaClient): Promise<AdminStatsP
         code: row.code,
         avgScore: row.avgScore,
       })),
+      overallSeries,
       overallByDay,
       hintsByManager: managerRows.map((row) => ({
         name: row.name,

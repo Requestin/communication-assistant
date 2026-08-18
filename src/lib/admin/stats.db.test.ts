@@ -189,6 +189,7 @@ describe.skipIf(!prisma)("admin stats against Postgres", () => {
       hintRate(allScores.filter((row) => row.showHint).length, allScores.length),
     );
     expect(after.charts.overallByDay.length).toBeGreaterThan(0);
+    expect(after.charts.overallSeries).toHaveLength(allScores.length);
     expect(after.charts.scoreByManager).toHaveLength(3);
 
     const cookie = cookieHeader(await loginAs(igorId));
@@ -256,8 +257,12 @@ describe.skipIf(!prisma)("admin stats against Postgres", () => {
       new Request("http://127.0.0.1:3010/api/admin/stats", { headers: { cookie: igorCookie } }),
     );
     expect(ok.status).toBe(200);
-    const body = (await ok.json()) as { managers: unknown[]; charts: { overallByDay: unknown[] } };
+    const body = (await ok.json()) as {
+      managers: unknown[];
+      charts: { overallByDay: unknown[]; overallSeries: unknown[] };
+    };
     expect(body.managers).toHaveLength(3);
     expect(Array.isArray(body.charts.overallByDay)).toBe(true);
+    expect(Array.isArray(body.charts.overallSeries)).toBe(true);
   });
 });
