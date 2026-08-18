@@ -4,7 +4,7 @@ import type { Job, Message, PrismaClient } from "@prisma/client";
 import { completeJson } from "@/lib/ai/llm";
 import { clipBody } from "@/lib/mail/parse";
 import { isValidIsoDate } from "@/lib/travel/dates";
-import { formatTravelOfferInsertText, TRAVEL_DISCLAIMER } from "@/lib/travel/offer-text";
+import { formatTravelOfferInsertText } from "@/lib/travel/offer-text";
 import {
   cheapestFallbackPackage,
   validateTravelPackage,
@@ -17,8 +17,6 @@ import { searchTravel, type TravelSearchResult } from "@/lib/travel/search";
 
 const THREAD_CLIP = 8000;
 const MISSING_SLOTS = ["origin", "destination", "dateFrom", "dateTo"] as const;
-export { TRAVEL_DISCLAIMER };
-
 export type MissingSlot = (typeof MISSING_SLOTS)[number];
 
 export type TravelExtract = {
@@ -40,7 +38,6 @@ export type TravelOfferPayload = {
   summary: string;
   packages: ValidatedPackage[];
   warnings: string[];
-  disclaimer: string;
   originCityId: string | null;
   destCityId: string | null;
   people: number;
@@ -189,7 +186,7 @@ function parseModelPackages(input: unknown): { summary: string; packages: ModelP
 }
 
 function formatOfferBody(summary: string, warnings: string[]): string {
-  const lines = [summary.trim() || "Подбор по заявке.", "", TRAVEL_DISCLAIMER];
+  const lines = [summary.trim() || "Подбор по заявке."];
   if (warnings.length > 0) {
     lines.push("", ...warnings.map((item) => `• ${item}`));
   }
@@ -259,11 +256,10 @@ export async function processSuggestTravel(
     await writeOffer(prisma, job.conversationId, {
       kind: "travel_offer",
       summary: unknownCity
-        ? `В учебном справочнике нет города «${unknownCity}». Уточните направление.`
+        ? `В справочнике нет города «${unknownCity}». Уточните направление.`
         : "Не удалось разобрать города. Уточните заявку.",
       packages: [],
       warnings: unresolved.length > 0 ? unresolved.map((item) => `Не найден город: ${item}`) : [],
-      disclaimer: TRAVEL_DISCLAIMER,
       originCityId: originCity?.id ?? null,
       destCityId: destCity?.id ?? null,
       people: extracted.people,
@@ -278,7 +274,6 @@ export async function processSuggestTravel(
       summary: formatMissingAdvice(gaps.length > 0 ? gaps : requiredGaps(extracted)),
       packages: [],
       warnings: [],
-      disclaimer: TRAVEL_DISCLAIMER,
       originCityId: originCity?.id ?? null,
       destCityId: destCity?.id ?? null,
       people: extracted.people,
@@ -309,7 +304,6 @@ export async function processSuggestTravel(
       summary: `Нет подходящих рейсов ${originCity.name} → ${destCity.name} на ${dateFrom}.`,
       packages: [],
       warnings,
-      disclaimer: TRAVEL_DISCLAIMER,
       originCityId: originCity.id,
       destCityId: destCity.id,
       people: extracted.people,
@@ -322,7 +316,6 @@ export async function processSuggestTravel(
       summary: `Нет обратных рейсов ${destCity.name} → ${originCity.name}${extracted.dateTo ? ` на ${extracted.dateTo}` : ""}.`,
       packages: [],
       warnings,
-      disclaimer: TRAVEL_DISCLAIMER,
       originCityId: originCity.id,
       destCityId: destCity.id,
       people: extracted.people,
@@ -335,7 +328,6 @@ export async function processSuggestTravel(
       summary: search.hotelWarning ?? "На эти ночи нет номеров.",
       packages: [],
       warnings,
-      disclaimer: TRAVEL_DISCLAIMER,
       originCityId: originCity.id,
       destCityId: destCity.id,
       people: extracted.people,
@@ -388,7 +380,6 @@ export async function processSuggestTravel(
     summary,
     packages: accepted,
     warnings: [...warnings, ...packed.warnings],
-    disclaimer: TRAVEL_DISCLAIMER,
     originCityId: originCity.id,
     destCityId: destCity.id,
     people: extracted.people,

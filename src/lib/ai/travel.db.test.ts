@@ -2,7 +2,7 @@ import { PrismaClient } from "@prisma/client";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { processNextJob } from "./jobs";
 import { resetLlmClientStateForTests, setLlmCompleteForTests } from "./llm";
-import { processSuggestTravel, TRAVEL_DISCLAIMER } from "./travel";
+import { processSuggestTravel } from "./travel";
 import { ingestInbound } from "../mail/ingest";
 import { parseMailFields } from "../mail/parse";
 import { packageTotalRub } from "../travel/price";
@@ -91,7 +91,7 @@ describe.skipIf(!prisma)("suggest_travel jobs", () => {
     const note = await prisma!.aiNote.findFirst({ where: { conversationId } });
     expect(note).toMatchObject({ type: "travel_offer" });
     expect(note?.body).toMatch(/Томск/);
-    expect(note?.body).toMatch(new RegExp(TRAVEL_DISCLAIMER));
+    expect(note?.body).not.toMatch(/учебн|оферт/i);
     const payload = note?.payload as Record<string, unknown>;
     expect(payload.packages).toEqual([]);
     expect(payload.destCityId).toBeNull();
@@ -146,7 +146,7 @@ describe.skipIf(!prisma)("suggest_travel jobs", () => {
     await processSuggestTravel(prisma!, { id: "direct-led", conversationId });
     const note = await prisma!.aiNote.findFirst({ where: { conversationId } });
     expect(note).toMatchObject({ type: "travel_offer" });
-    expect(note?.body).toMatch(new RegExp(TRAVEL_DISCLAIMER));
+    expect(note?.body).not.toMatch(/учебн|оферт/i);
     const payload = note?.payload as {
       packages: Array<{
         outboundFlightId: string;

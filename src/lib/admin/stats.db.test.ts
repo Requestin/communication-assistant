@@ -118,7 +118,7 @@ describe.skipIf(!prisma)("admin stats against Postgres", () => {
           conversationId: inbound.conversationId,
           type: "travel_offer",
           title: "Подбор",
-          body: "учебные данные, не оферта",
+          body: "Подбор командировки",
           payload: {},
         },
       });

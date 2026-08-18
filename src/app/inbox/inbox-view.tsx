@@ -431,11 +431,11 @@ export function InboxView({
               <div className="flex flex-1 items-center justify-center text-center">
                 <div className="max-w-md space-y-2">
                   <p className="font-heading text-lg">{emptyList ? "Ждём первое письмо" : "Выберите диалог"}</p>
-                  <p className="text-muted-foreground">
-                    {emptyList
-                      ? "Клиент пишет на ваш рабочий Gmail. Здесь не дыра и не ошибка — просто ещё нет переписки."
-                      : "Слева диалоги по темам писем. Одна тема — одна лента."}
-                  </p>
+                  {emptyList ? (
+                    <p className="text-muted-foreground">
+                      Клиент пишет на ваш рабочий Gmail. Здесь не дыра и не ошибка — просто ещё нет переписки.
+                    </p>
+                  ) : null}
                 </div>
               </div>
             ) : (
@@ -542,9 +542,9 @@ export function InboxView({
                     "Подобрать решение"
                   )}
                 </Button>
-                <span className="text-sm text-muted-foreground">
-                  {selected ? "ответ уйдёт на почту клиента" : "выберите клиента"}
-                </span>
+                {!selected ? (
+                  <span className="text-sm text-muted-foreground">выберите клиента</span>
+                ) : null}
               </div>
             </div>
           ) : null}
