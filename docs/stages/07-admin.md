@@ -8,8 +8,8 @@
 - [§17](../../ARCHITECTURE.md#17-контракты-http-минимум) — `/api/admin/*`
 
 Ветка: `stage/07-admin`  
-База: `main` после этапа 6  
-Зависимость: [06-travel-agent.md](06-travel-agent.md) влит в `main`  
+База: `main` после этапа 6.1  
+Зависимость: [06-1-fix-travel-agent.md](06-1-fix-travel-agent.md) (код уже в `main` вместе с [06-travel-agent.md](06-travel-agent.md), PR #9)  
 PR: `[stage 07] Статистика отдела и провал в переписки`
 
 ## Скиллы
