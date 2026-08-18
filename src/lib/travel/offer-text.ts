@@ -1,5 +1,3 @@
-export const TRAVEL_DISCLAIMER = "учебные данные, не оферта";
-
 export type TravelOfferInsertPackage = {
   label: string;
   outboundLabel: string;
@@ -13,7 +11,7 @@ export function formatTravelOfferInsertText(input: {
   summary: string;
   packages: TravelOfferInsertPackage[];
 }): string {
-  const lines = [input.summary.trim() || "Подбор по заявке.", "", TRAVEL_DISCLAIMER];
+  const lines = [input.summary.trim() || "Подбор по заявке."];
   for (const item of input.packages) {
     lines.push(
       "",

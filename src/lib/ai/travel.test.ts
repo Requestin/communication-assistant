@@ -4,7 +4,6 @@ import {
   formatOfferInsertText,
   parseTravelExtract,
   requiredGaps,
-  TRAVEL_DISCLAIMER,
 } from "./travel";
 
 describe("parseTravelExtract", () => {
@@ -84,7 +83,7 @@ describe("formatMissingAdvice", () => {
 });
 
 describe("formatOfferInsertText", () => {
-  it("includes the disclaimer and recomputed total", () => {
+  it("includes flights, hotel and recomputed total", () => {
     const text = formatOfferInsertText({
       kind: "travel_offer",
       summary: "Москва → Петербург",
@@ -107,12 +106,11 @@ describe("formatOfferInsertText", () => {
         },
       ],
       warnings: [],
-      disclaimer: TRAVEL_DISCLAIMER,
       originCityId: "MOW",
       destCityId: "LED",
       people: 2,
     });
-    expect(text).toContain(TRAVEL_DISCLAIMER);
+    expect(text).not.toMatch(/учебн|оферт/i);
     expect(text).toContain("38000 ₽");
     expect(text).toContain("SU100");
   });

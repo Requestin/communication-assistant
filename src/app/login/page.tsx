@@ -20,11 +20,8 @@ export default async function LoginPage() {
   return (
     <main className="mx-auto flex min-h-screen max-w-3xl flex-col justify-center gap-10 p-8">
       <div className="space-y-3">
-        <p className="text-sm tracking-wide text-primary uppercase">учебный стенд</p>
         <h1 className="text-3xl font-medium tracking-tight">Вход</h1>
-        <p className="max-w-lg text-muted-foreground">
-          Выберите себя. Пароля нет — это учебный стенд.
-        </p>
+        <p className="max-w-lg text-muted-foreground">Выберите себя. Пароля нет.</p>
       </div>
       {ordered.length === 0 ? (
         <p className="rounded-xl border border-dashed border-border px-4 py-6 text-muted-foreground">

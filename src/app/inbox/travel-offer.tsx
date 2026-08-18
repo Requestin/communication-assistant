@@ -8,7 +8,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import type { InboxNoteDto } from "@/lib/inbox";
-import { formatTravelOfferInsertText, TRAVEL_DISCLAIMER } from "@/lib/travel/offer-text";
+import { formatTravelOfferInsertText } from "@/lib/travel/offer-text";
 
 function asString(value: unknown): string {
   return typeof value === "string" ? value : "";
@@ -102,7 +102,6 @@ export function TravelOfferCard({
   const summary = asString(note.payload.summary) || note.body;
   const packages = asPackages(note.payload.packages);
   const warnings = asWarnings(note.payload.warnings);
-  const disclaimer = asString(note.payload.disclaimer) || TRAVEL_DISCLAIMER;
   const insertText = formatTravelOfferInsertText({ summary, packages });
 
   return (
@@ -168,7 +167,6 @@ export function TravelOfferCard({
           ))}
         </ul>
       ) : null}
-      <p className="mt-3 text-xs uppercase tracking-[0.14em] text-primary/90">{disclaimer}</p>
       {canInsert && packages.length > 0 ? (
         <div className="mt-3">
           <Button
