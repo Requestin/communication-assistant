@@ -24,6 +24,26 @@ describe("parse inbound mail", () => {
     expect(parsed.bodyText).not.toContain("<p>");
   });
 
+  it("skips Google account notifications as system mail", () => {
+    const parsed = parseMailFields({
+      fromEmail: "no-reply@accounts.google.com",
+      fromName: "Google",
+      subject: "Оповещение системы безопасности",
+      text: "Новый вход",
+    });
+    expect(skipReason(parsed, "communicationassistant36@gmail.com")).toBe("system");
+    const nested = parseMailFields({
+      fromEmail: "noreply@mail.accounts.google.com",
+      text: "x",
+    });
+    expect(skipReason(nested, "communicationassistant36@gmail.com")).toBe("system");
+    const client = parseMailFields({
+      fromEmail: "k.darchinyants@gmail.com",
+      text: "Нужна командировка",
+    });
+    expect(skipReason(client, "communicationassistant36@gmail.com")).toBeNull();
+  });
+
   it("skips mail from the manager mailbox and X-CommAssist", async () => {
     const self = await parseEml(readFileSync(path.join(fixtures, "from-self.eml")));
     expect(skipReason(self, "communicationassistant36@gmail.com")).toBe("self");
