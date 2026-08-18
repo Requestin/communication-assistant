@@ -180,6 +180,12 @@ describe.skipIf(!prisma)("POST /api/conversations/:id/messages", () => {
     expect(conversation?.subject).toBe("Re: Тест IMAP");
     expect(conversation?.lastMessageAt.getTime()).toBe(outbound[0]?.sentAt.getTime());
 
-    expect(await prisma!.job.count({ where: { conversationId: thread.conversationId } })).toBe(0);
+    const jobs = await prisma!.job.findMany({ where: { conversationId: thread.conversationId } });
+    expect(jobs).toHaveLength(1);
+    expect(jobs[0]).toMatchObject({
+      type: "evaluate_quality",
+      status: "pending",
+      messageId: outbound[0]?.id,
+    });
   });
 });

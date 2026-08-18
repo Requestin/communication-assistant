@@ -130,4 +130,65 @@ describe.skipIf(!prisma)("GET /api/inbox/snapshot", () => {
     const afterDupBody = (await afterDup.json()) as InboxSnapshotDto;
     expect(afterDupBody.messages).toHaveLength(1);
   });
+
+  it("returns staff quality notes only for the open thread", async () => {
+    const inbound = await ingestInbound(prisma!, {
+      managerId: annaId,
+      managerEmail: "communicationassistant36@gmail.com",
+      gmailUid: "2101",
+      parsed: parseMailFields({
+        fromEmail: "imap-test-note@example.com",
+        fromName: "Клиент с подсказкой",
+        subject: "Заявка",
+        text: "Нужна командировка",
+      }),
+    });
+    if (inbound.status !== "created") {
+      throw new Error("failed to seed thread");
+    }
+
+    await prisma!.aiNote.create({
+      data: {
+        conversationId: inbound.conversationId,
+        messageId: inbound.messageId,
+        type: "quality_hint",
+        title: "Подсказка по качеству",
+        body: "Перепишите нейтрально.",
+        payload: {
+          literacy: 4,
+          spelling: 3,
+          punctuation: 2,
+          businessStyle: 2,
+          overall: 2.8,
+          issues: ["Сленг"],
+          hint: "Перепишите нейтрально.",
+          showHint: true,
+        },
+      },
+    });
+
+    const cookie = cookieHeader(await loginAs(annaId));
+    const list = await snapshot(
+      new Request("http://127.0.0.1:3010/api/inbox/snapshot", { headers: { cookie } }),
+    );
+    const listBody = (await list.json()) as InboxSnapshotDto;
+    expect(listBody.notes).toEqual([]);
+
+    const thread = await snapshot(
+      new Request(
+        `http://127.0.0.1:3010/api/inbox/snapshot?conversationId=${inbound.conversationId}`,
+        { headers: { cookie } },
+      ),
+    );
+    const threadBody = (await thread.json()) as InboxSnapshotDto;
+    expect(threadBody.notes).toHaveLength(1);
+    expect(threadBody.notes[0]).toMatchObject({
+      type: "quality_hint",
+      title: "Подсказка по качеству",
+      body: "Перепишите нейтрально.",
+      spelling: 3,
+      overall: 2.8,
+      issues: ["Сленг"],
+    });
+  });
 });

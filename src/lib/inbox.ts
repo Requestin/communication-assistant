@@ -1,4 +1,4 @@
-import type { Message, PrismaClient } from "@prisma/client";
+import type { AiNote, Message, PrismaClient } from "@prisma/client";
 
 export type InboxConversationDto = {
   id: string;
@@ -21,10 +21,26 @@ export type InboxMessageDto = {
   createdAt: string;
 };
 
+export type InboxNoteDto = {
+  id: string;
+  conversationId: string;
+  messageId: string | null;
+  type: "quality_hint" | "travel_offer";
+  title: string;
+  body: string;
+  createdAt: string;
+  literacy: number | null;
+  spelling: number | null;
+  punctuation: number | null;
+  businessStyle: number | null;
+  overall: number | null;
+  issues: string[];
+};
+
 export type InboxSnapshotDto = {
   conversations: InboxConversationDto[];
   messages: InboxMessageDto[];
-  notes: [];
+  notes: InboxNoteDto[];
 };
 
 const PREVIEW_LEN = 160;
@@ -48,6 +64,39 @@ export function toMessageDto(message: Message): InboxMessageDto {
     bodyText: message.bodyText,
     sentAt: message.sentAt.toISOString(),
     createdAt: message.createdAt.toISOString(),
+  };
+}
+
+function asScore(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function asIssues(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.filter((item): item is string => typeof item === "string");
+}
+
+export function toNoteDto(note: AiNote): InboxNoteDto {
+  const payload =
+    note.payload && typeof note.payload === "object" && !Array.isArray(note.payload)
+      ? (note.payload as Record<string, unknown>)
+      : {};
+  return {
+    id: note.id,
+    conversationId: note.conversationId,
+    messageId: note.messageId,
+    type: note.type,
+    title: note.title,
+    body: note.body,
+    createdAt: note.createdAt.toISOString(),
+    literacy: asScore(payload.literacy),
+    spelling: asScore(payload.spelling),
+    punctuation: asScore(payload.punctuation),
+    businessStyle: asScore(payload.businessStyle),
+    overall: asScore(payload.overall),
+    issues: asIssues(payload.issues),
   };
 }
 
@@ -86,17 +135,26 @@ export async function buildInboxSnapshot(
     return { conversations: conversationDtos, messages: [], notes: [] };
   }
 
-  const messages = await prisma.message.findMany({
-    where: {
-      conversationId: options.conversationId,
-      ...(options.since ? { createdAt: { gt: options.since } } : {}),
-    },
-    orderBy: { sentAt: "asc" },
-  });
+  const [messages, notes] = await Promise.all([
+    prisma.message.findMany({
+      where: {
+        conversationId: options.conversationId,
+        ...(options.since ? { createdAt: { gt: options.since } } : {}),
+      },
+      orderBy: { sentAt: "asc" },
+    }),
+    prisma.aiNote.findMany({
+      where: {
+        conversationId: options.conversationId,
+        ...(options.since ? { createdAt: { gt: options.since } } : {}),
+      },
+      orderBy: { createdAt: "asc" },
+    }),
+  ]);
 
   return {
     conversations: conversationDtos,
     messages: messages.map(toMessageDto),
-    notes: [],
+    notes: notes.map(toNoteDto),
   };
 }

@@ -20,6 +20,7 @@ COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && npm install prisma tsx
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/src ./src
+COPY --from=builder /app/prompts ./prompts
 COPY --from=builder /app/tsconfig.json ./tsconfig.json
 RUN npx prisma generate
 COPY --from=builder /app/public ./public

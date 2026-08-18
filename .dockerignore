@@ -8,3 +8,4 @@ docs/plans
 coverage
 *.md
 !README.md
+!prompts/*.md
