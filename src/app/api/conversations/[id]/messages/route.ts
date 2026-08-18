@@ -86,7 +86,22 @@ export async function POST(request: Request, context: RouteContext) {
     data: { subject, lastMessageAt: sentAt },
   });
 
-  // TODO(stage 05): создать Job evaluate_quality после исходящего.
+  try {
+    await prisma.job.create({
+      data: {
+        type: "evaluate_quality",
+        status: "pending",
+        conversationId: conversation.id,
+        messageId: message.id,
+        payload: { messageId: message.id },
+      },
+    });
+  } catch (error) {
+    console.error("[smtp] failed to enqueue quality job after outbound was saved");
+    if (error instanceof Error) {
+      console.error(`[smtp] ${error.message}`);
+    }
+  }
 
   return NextResponse.json({ message: toMessageDto(message) });
 }

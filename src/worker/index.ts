@@ -1,11 +1,13 @@
 import { config } from "dotenv";
 import { PrismaClient } from "@prisma/client";
+import { processNextQualityJob } from "@/lib/ai/jobs";
 import { imapPollMs, loadMailboxAccounts } from "@/lib/mail/accounts";
 import { closeMailbox, pollMailbox, safeError } from "@/lib/mail/imap";
 
 config();
 
 const prisma = new PrismaClient();
+const JOB_POLL_MS = 1500;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => {
@@ -13,13 +15,28 @@ function sleep(ms: number): Promise<void> {
   });
 }
 
-async function main(): Promise<void> {
+async function processJobsLoop(): Promise<void> {
+  while (true) {
+    try {
+      const claimed = await processNextQualityJob(prisma);
+      if (!claimed) {
+        await sleep(JOB_POLL_MS);
+      }
+    } catch (error) {
+      console.error(`[jobs] ${safeError(error)}`);
+      await sleep(JOB_POLL_MS);
+    }
+  }
+}
+
+async function pollMailboxLoop(): Promise<void> {
   const { ready, skipped } = loadMailboxAccounts();
   if (skipped.length > 0) {
     console.info(`[worker] skip mailboxes without app password: ${skipped.join(", ")}`);
   }
   if (ready.length === 0) {
-    console.info("[worker] no mailboxes to poll; waiting");
+    console.info("[worker] no mailboxes to poll; jobs loop keeps running");
+    return;
   }
 
   const users = await prisma.user.findMany({
@@ -51,6 +68,10 @@ async function main(): Promise<void> {
       }
     }),
   );
+}
+
+async function main(): Promise<void> {
+  await Promise.all([processJobsLoop(), pollMailboxLoop()]);
 }
 
 main().catch(async (error) => {

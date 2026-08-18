@@ -28,6 +28,7 @@
     "mailparser": "^3.9.15",
     "next": "15.5.23",
     "nodemailer": "^9.0.5",
+    "openai": "^6.49.0",
     "prisma": "^6.19.3",
     "react": "19.1.0",
     "react-dom": "19.1.0",

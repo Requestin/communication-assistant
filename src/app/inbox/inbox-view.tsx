@@ -4,7 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import type { UserRole } from "@/lib/auth";
-import type { InboxConversationDto, InboxMessageDto, InboxSnapshotDto } from "@/lib/inbox";
+import type { InboxConversationDto, InboxMessageDto, InboxNoteDto, InboxSnapshotDto } from "@/lib/inbox";
+import { QualityNoteCard } from "./quality-note";
 
 type InboxViewProps = {
   pollSeconds: number;
@@ -39,9 +40,33 @@ function mergeMessages(
   return [...server, ...leftover];
 }
 
+type TimelineItem =
+  | { kind: "message"; at: number; id: string; message: InboxMessageDto }
+  | { kind: "note"; at: number; id: string; note: InboxNoteDto };
+
+function buildTimeline(messages: InboxMessageDto[], notes: InboxNoteDto[]): TimelineItem[] {
+  const items: TimelineItem[] = [
+    ...messages.map((message) => ({
+      kind: "message" as const,
+      at: new Date(message.sentAt).getTime(),
+      id: `message-${message.id}`,
+      message,
+    })),
+    ...notes.map((note) => ({
+      kind: "note" as const,
+      at: new Date(note.createdAt).getTime(),
+      id: `note-${note.id}`,
+      note,
+    })),
+  ];
+  items.sort((a, b) => a.at - b.at);
+  return items;
+}
+
 export function InboxView({ pollSeconds, role, managerCode }: InboxViewProps) {
   const [conversations, setConversations] = useState<InboxConversationDto[]>([]);
   const [messages, setMessages] = useState<InboxMessageDto[]>([]);
+  const [notes, setNotes] = useState<InboxNoteDto[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
@@ -75,6 +100,7 @@ export function InboxView({ pollSeconds, role, managerCode }: InboxViewProps) {
     }
     if (selectedId) {
       setMessages((previous) => mergeMessages(body.messages, previous));
+      setNotes(body.notes);
     }
   }, [managerCode, selectedId]);
 
@@ -98,6 +124,8 @@ export function InboxView({ pollSeconds, role, managerCode }: InboxViewProps) {
 
   const selected = conversations.find((item) => item.id === selectedId) ?? null;
   const emptyList = conversations.length === 0;
+  const timeline = buildTimeline(messages, notes);
+  const threadEmpty = timeline.length === 0;
 
   async function onSend() {
     if (!selected || !canReply || sending) {
@@ -171,6 +199,7 @@ export function InboxView({ pollSeconds, role, managerCode }: InboxViewProps) {
                     onClick={() => {
                       setSelectedId(item.id);
                       setMessages([]);
+                      setNotes([]);
                       setDraft("");
                     }}
                     className={`pressable w-full rounded-lg px-3 py-2 text-left ${
@@ -208,25 +237,29 @@ export function InboxView({ pollSeconds, role, managerCode }: InboxViewProps) {
                 <h1 className="font-heading text-xl">{selected.clientName}</h1>
                 <p className="text-sm text-muted-foreground">{selected.clientEmail}</p>
               </div>
-              {messages.length === 0 ? (
+              {threadEmpty ? (
                 <p className="text-sm text-muted-foreground">Писем в этой ленте пока нет.</p>
               ) : (
-                messages.map((message) => (
-                  <article
-                    key={message.id}
-                    className={`max-w-[42rem] rounded-xl border border-border px-4 py-3 ${
-                      message.direction === "outbound"
-                        ? "ml-auto bg-primary/10"
-                        : "bg-card"
-                    }`}
-                  >
-                    <div className="mb-2 text-xs text-muted-foreground">
-                      {message.direction === "outbound" ? "Исходящее" : "Входящее"} ·{" "}
-                      {message.subject} · {formatTime(message.sentAt)}
-                    </div>
-                    <p className="whitespace-pre-wrap text-sm">{message.bodyText}</p>
-                  </article>
-                ))
+                timeline.map((item) =>
+                  item.kind === "note" ? (
+                    <QualityNoteCard key={item.id} note={item.note} />
+                  ) : (
+                    <article
+                      key={item.id}
+                      className={`max-w-[42rem] rounded-xl border border-border px-4 py-3 ${
+                        item.message.direction === "outbound"
+                          ? "ml-auto bg-primary/10"
+                          : "bg-card"
+                      }`}
+                    >
+                      <div className="mb-2 text-xs text-muted-foreground">
+                        {item.message.direction === "outbound" ? "Исходящее" : "Входящее"} ·{" "}
+                        {item.message.subject} · {formatTime(item.message.sentAt)}
+                      </div>
+                      <p className="whitespace-pre-wrap text-sm">{item.message.bodyText}</p>
+                    </article>
+                  ),
+                )
               )}
             </div>
           )}

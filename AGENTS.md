@@ -94,10 +94,16 @@ npm run db:seed        # четыре пользователя
 npm run lint
 npm test               # vitest: юнит сида + проверка users в БД
 npm run dev            # http://127.0.0.1:3010
-npm run worker         # IMAP-воркер на хосте, БД 127.0.0.1:5433
+npm run worker         # IMAP + очередь jobs на хосте, БД 127.0.0.1:5433
 npm run build
 docker compose up --build -d web   # сайт, 127.0.0.1:3010
 docker compose up --build -d worker   # только наш воркер, без портов
+
+# Модель на 127.0.0.1:8088 (первый старт долгий, ~22 ГБ в GPU). Не трогает mapvideo.
+docker compose up -d llm
+# С хоста воркеру нужен LLM_BASE_URL=http://127.0.0.1:8088/v1
+# Если GPU-контейнер не встаёт (Blackwell): llama-server на хосте, bind 127.0.0.1:8088.
+# Не поднимать commassist-worker и npm run worker одновременно.
 ```
 
 ## Тест-гейт
