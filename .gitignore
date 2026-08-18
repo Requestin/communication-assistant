@@ -1,23 +1,44 @@
-/gmail_imap_test.py
+# Секреты и локальные черновики. В git только .env.example.
 .env
-.env.local
-.env.*.local
+.env.*
 !.env.example
+/gmail_imap_test.py
+docker-compose.override.yml
 
+# Сборки и зависимости
 node_modules/
 .next/
 out/
 dist/
 build/
 coverage/
+.turbo/
+
+# Сгенерированное
+*.tsbuildinfo
+next-env.d.ts
+
+# Планы Cursor — не публиковать
 /docs/plans
 
-.DS_Store
+# Ключи, дампы, веса модели
 *.pem
+*.key
+*.gguf
+*.dump
+*.sql.gz
+
+# Логи и ОС
+.DS_Store
+Thumbs.db
+*.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
+
+# Редакторы / хостинг
+.idea/
 .vercel
-*.tsbuildinfo
-next-env.d.ts
+*.swp
+*~
