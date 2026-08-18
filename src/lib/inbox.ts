@@ -7,6 +7,13 @@ export type InboxConversationDto = {
   subject: string;
   lastMessageAt: string;
   preview: string;
+  managerCode?: string;
+  managerName?: string;
+};
+
+export type InboxManagerDto = {
+  code: string;
+  name: string;
 };
 
 export type InboxMessageDto = {
@@ -55,6 +62,8 @@ export type InboxSnapshotDto = {
   notes: InboxNoteDto[];
   jobs: InboxSuggestJobDto[];
   alerts: InboxAlertDto[];
+  managers?: InboxManagerDto[];
+  openConversation?: InboxConversationDto;
 };
 
 const PREVIEW_LEN = 160;
@@ -149,39 +158,75 @@ export function staffAlertsFromJobs(
   return alerts;
 }
 
-export async function buildInboxSnapshot(
-  prisma: PrismaClient,
-  options: {
-    managerId?: string;
-    conversationId?: string;
-    since?: Date;
-  },
-): Promise<InboxSnapshotDto> {
-  const conversations = await prisma.conversation.findMany({
-    where: options.managerId ? { managerId: options.managerId } : undefined,
-    orderBy: { lastMessageAt: "desc" },
-    include: {
-      client: { select: { displayName: true, email: true } },
-      messages: { orderBy: { sentAt: "desc" }, take: 1 },
-    },
-  });
+type ConversationCard = {
+  id: string;
+  subject: string;
+  lastMessageAt: Date;
+  client: { displayName: string; email: string };
+  manager: { code: string; name: string };
+  messages: Array<{ bodyText: string }>;
+};
 
-  const conversationDtos: InboxConversationDto[] = conversations.map((item) => ({
+function toConversationDto(item: ConversationCard): InboxConversationDto {
+  return {
     id: item.id,
     clientName: item.client.displayName,
     clientEmail: item.client.email,
     subject: item.subject,
     lastMessageAt: item.lastMessageAt.toISOString(),
     preview: previewText(item.messages[0]?.bodyText ?? ""),
-  }));
+    managerCode: item.manager.code,
+    managerName: item.manager.name,
+  };
+}
+
+const conversationCardInclude = {
+  client: { select: { displayName: true, email: true } },
+  manager: { select: { code: true, name: true } },
+  messages: { orderBy: { sentAt: "desc" as const }, take: 1 },
+};
+
+export async function buildInboxSnapshot(
+  prisma: PrismaClient,
+  options: {
+    managerId?: string;
+    accessManagerId?: string;
+    conversationId?: string;
+    since?: Date;
+    includeManagers?: boolean;
+  },
+): Promise<InboxSnapshotDto> {
+  const [conversations, managers] = await Promise.all([
+    prisma.conversation.findMany({
+      where: options.managerId ? { managerId: options.managerId } : undefined,
+      orderBy: { lastMessageAt: "desc" },
+      include: conversationCardInclude,
+    }),
+    options.includeManagers
+      ? prisma.user.findMany({
+          where: { role: "manager" },
+          select: { code: true, name: true },
+          orderBy: { name: "asc" },
+        })
+      : Promise.resolve(undefined),
+  ]);
+
+  const conversationDtos = conversations.map(toConversationDto);
+  const extras = managers ? { managers } : {};
 
   if (!options.conversationId) {
-    return { conversations: conversationDtos, messages: [], notes: [], jobs: [], alerts: [] };
+    return { conversations: conversationDtos, messages: [], notes: [], jobs: [], alerts: [], ...extras };
   }
 
-  const owned = conversations.some((item) => item.id === options.conversationId);
-  if (!owned) {
-    return { conversations: conversationDtos, messages: [], notes: [], jobs: [], alerts: [] };
+  const thread = await prisma.conversation.findUnique({
+    where: { id: options.conversationId },
+    include: conversationCardInclude,
+  });
+  if (
+    !thread ||
+    (options.accessManagerId && thread.managerId !== options.accessManagerId)
+  ) {
+    return { conversations: conversationDtos, messages: [], notes: [], jobs: [], alerts: [], ...extras };
   }
 
   const [messages, notes, jobs, latestJobs] = await Promise.all([
@@ -224,5 +269,7 @@ export async function buildInboxSnapshot(
       return dto ? [dto] : [];
     }),
     alerts: staffAlertsFromJobs(latestJobs),
+    openConversation: toConversationDto(thread),
+    ...extras,
   };
 }

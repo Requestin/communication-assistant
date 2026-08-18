@@ -23,28 +23,22 @@ export default async function AdminPage() {
     <div className="flex min-h-screen flex-col">
       <AppHeader name={session.name} role={session.role} />
       <main className="mx-auto flex w-full max-w-6xl flex-col gap-8 p-6">
-        <div>
-          <h1 className="font-heading text-3xl tracking-tight">Админка</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Оценки исходящих писем и подборы по отделу. Клиент эти цифры не видит.
-            {stats.department.replies === 0
-              ? " Пока ответов нет — нули здесь нормальны, не ошибка."
-              : null}
-          </p>
-        </div>
+        <h1 className="font-heading text-3xl tracking-tight">Консоль</h1>
 
         <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <Card>
             <CardHeader>
               <CardTitle>Ответы отдела</CardTitle>
             </CardHeader>
-            <CardContent className="font-heading text-2xl tabular-nums">{stats.department.replies}</CardContent>
+            <CardContent className="text-3xl font-semibold tracking-tight">
+              {stats.department.replies}
+            </CardContent>
           </Card>
           <Card>
             <CardHeader>
               <CardTitle>Средняя оценка</CardTitle>
             </CardHeader>
-            <CardContent className="font-heading text-2xl tabular-nums">
+            <CardContent className="text-3xl font-semibold tracking-tight">
               {formatScore(stats.department.avgScore)}
             </CardContent>
           </Card>
@@ -52,7 +46,7 @@ export default async function AdminPage() {
             <CardHeader>
               <CardTitle>Доля с подсказкой</CardTitle>
             </CardHeader>
-            <CardContent className="font-heading text-2xl tabular-nums">
+            <CardContent className="text-3xl font-semibold tracking-tight">
               {formatHintRate(stats.department.hintRate)}
             </CardContent>
           </Card>
@@ -60,7 +54,9 @@ export default async function AdminPage() {
             <CardHeader>
               <CardTitle>Подборы</CardTitle>
             </CardHeader>
-            <CardContent className="font-heading text-2xl tabular-nums">{stats.department.suggestions}</CardContent>
+            <CardContent className="text-3xl font-semibold tracking-tight">
+              {stats.department.suggestions}
+            </CardContent>
           </Card>
         </section>
 

@@ -1,17 +1,20 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import type { UserRole } from "@/lib/auth";
 import type {
   InboxAlertDto,
   InboxConversationDto,
+  InboxManagerDto,
   InboxMessageDto,
   InboxNoteDto,
-  InboxSnapshotDto,
   InboxSuggestJobDto,
 } from "@/lib/inbox";
+import { fetchInboxSnapshot, inboxSnapshotQuery } from "@/lib/inbox-fetch";
+import { nextInboxSelection } from "@/lib/inbox-selection";
 import { isNearBottom, scrollToEnd } from "@/lib/inbox-scroll";
 import { QualityNoteCard } from "./quality-note";
 import { TravelOfferCard } from "./travel-offer";
@@ -20,7 +23,6 @@ type InboxViewProps = {
   pollSeconds: number;
   role: UserRole;
   managerCode?: string;
-  managerName?: string;
   initialConversationId?: string;
 };
 
@@ -74,19 +76,41 @@ function buildTimeline(messages: InboxMessageDto[], notes: InboxNoteDto[]): Time
   return items;
 }
 
+const REPLY_MIN_PX = 64;
+const REPLY_MAX_PX = 224;
+
+function fitReplyHeight(el: HTMLTextAreaElement) {
+  el.style.height = "0px";
+  el.style.height = `${Math.min(Math.max(el.scrollHeight, REPLY_MIN_PX), REPLY_MAX_PX)}px`;
+}
+
+function inboxPagePath(managerCode?: string, conversationId?: string | null): string {
+  const params = new URLSearchParams();
+  if (managerCode) {
+    params.set("manager", managerCode);
+  }
+  if (conversationId) {
+    params.set("conversation", conversationId);
+  }
+  const query = params.toString();
+  return query ? `/inbox?${query}` : "/inbox";
+}
+
 export function InboxView({
   pollSeconds,
   role,
   managerCode,
-  managerName,
   initialConversationId,
 }: InboxViewProps) {
+  const router = useRouter();
   const [conversations, setConversations] = useState<InboxConversationDto[]>([]);
+  const [managers, setManagers] = useState<InboxManagerDto[]>([]);
   const [messages, setMessages] = useState<InboxMessageDto[]>([]);
   const [notes, setNotes] = useState<InboxNoteDto[]>([]);
   const [jobs, setJobs] = useState<InboxSuggestJobDto[]>([]);
   const [alerts, setAlerts] = useState<InboxAlertDto[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(initialConversationId ?? null);
+  const [openConversation, setOpenConversation] = useState<InboxConversationDto | null>(null);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [suggesting, setSuggesting] = useState(false);
@@ -95,6 +119,7 @@ export function InboxView({
   const travelBusy =
     suggesting || jobs.some((job) => job.status === "pending" || job.status === "processing");
   const feedRef = useRef<HTMLDivElement>(null);
+  const replyRef = useRef<HTMLTextAreaElement>(null);
   const stickToBottomRef = useRef(true);
   const forceScrollRef = useRef(true);
   const selectedIdRef = useRef(selectedId);
@@ -103,38 +128,51 @@ export function InboxView({
     if (document.visibilityState !== "visible") {
       return;
     }
-    const params = new URLSearchParams();
-    if (selectedId) {
-      params.set("conversationId", selectedId);
-    }
-    if (managerCode) {
-      params.set("manager", managerCode);
-    }
-    const query = params.toString();
-    const response = await fetch(`/api/inbox/snapshot${query ? `?${query}` : ""}`);
-    if (!response.ok) {
-      const body = (await response.json().catch(() => ({}))) as { error?: string };
-      setError(body.error ?? "Не удалось обновить ленту");
+    const result = await fetchInboxSnapshot(
+      fetch,
+      inboxSnapshotQuery({ selectedId, managerCode }),
+    );
+    if (!result.ok) {
+      setError(result.error);
       return;
     }
-    const body = (await response.json()) as InboxSnapshotDto;
+    const body = result.snapshot;
     setError(null);
     setConversations(body.conversations);
-    if (selectedId && !body.conversations.some((item) => item.id === selectedId)) {
-      setSelectedId(body.conversations[0]?.id ?? null);
-      return;
+    if (body.managers) {
+      setManagers(body.managers);
     }
-    if (!selectedId && body.conversations[0]) {
-      setSelectedId(body.conversations[0].id);
+    const nextId = nextInboxSelection({
+      selectedId,
+      conversationIds: body.conversations.map((item) => item.id),
+      autoSelectFirst: role === "manager",
+      keepSelectedIfMissing: role === "chief",
+    });
+    if (nextId !== selectedId) {
+      setSelectedId(nextId);
+      if (!nextId) {
+        setMessages([]);
+        setNotes([]);
+        setJobs([]);
+        setAlerts([]);
+        setOpenConversation(null);
+      }
       return;
     }
     if (selectedId) {
+      setOpenConversation((previous) => {
+        if (body.openConversation?.id === selectedId) {
+          return body.openConversation;
+        }
+        const fromList = body.conversations.find((item) => item.id === selectedId);
+        return fromList ?? (previous?.id === selectedId ? previous : null);
+      });
       setMessages((previous) => mergeMessages(body.messages, previous));
       setNotes(body.notes);
       setJobs(body.jobs ?? []);
       setAlerts(body.alerts ?? []);
     }
-  }, [managerCode, selectedId]);
+  }, [managerCode, role, selectedId]);
 
   useEffect(() => {
     void load();
@@ -154,7 +192,9 @@ export function InboxView({
     };
   }, [load, pollSeconds]);
 
-  const selected = conversations.find((item) => item.id === selectedId) ?? null;
+  const selected =
+    conversations.find((item) => item.id === selectedId) ??
+    (openConversation?.id === selectedId ? openConversation : null);
   const emptyList = conversations.length === 0;
   const timeline = buildTimeline(messages, notes);
   const threadEmpty = timeline.length === 0 && !travelBusy;
@@ -175,6 +215,14 @@ export function InboxView({
       forceScrollRef.current = false;
     }
   }, [selectedId, messages, notes, alerts, travelBusy]);
+
+  useLayoutEffect(() => {
+    const el = replyRef.current;
+    if (!el) {
+      return;
+    }
+    fitReplyHeight(el);
+  }, [draft, selectedId, canReply]);
 
   function pinFeedToEnd() {
     forceScrollRef.current = true;
@@ -198,6 +246,11 @@ export function InboxView({
     setAlerts([]);
     setDraft("");
     setSuggesting(false);
+    router.replace(inboxPagePath(managerCode, id));
+  }
+
+  function onManagerFilter(code: string) {
+    router.replace(inboxPagePath(code || undefined, selectedId));
   }
 
   async function onSend() {
@@ -290,19 +343,26 @@ export function InboxView({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      {managerName ? (
-        <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border bg-card/70 px-6 py-2 text-sm">
-          <p>
-            Лента: <span className="font-heading">{managerName}</span>
-          </p>
-          <a href="/admin" className="text-primary hover:underline">
-            Назад в админку
-          </a>
-        </div>
-      ) : null}
       <div className="grid min-h-0 flex-1 grid-cols-1 grid-rows-[minmax(0,12rem)_minmax(0,1fr)] md:grid-cols-[20rem_1fr] md:grid-rows-[minmax(0,1fr)]">
         <aside className="min-h-0 overflow-y-auto border-b border-border bg-card/40 p-5 md:border-r md:border-b-0">
-          <h2 className="mb-3 text-sm font-medium text-muted-foreground">Диалоги</h2>
+          <div className="mb-3 flex items-center gap-2">
+            <h2 className="shrink-0 font-heading text-base tracking-tight">Диалоги</h2>
+            {role === "chief" ? (
+              <select
+                aria-label="Менеджер"
+                value={managerCode ?? ""}
+                onChange={(event) => onManagerFilter(event.target.value)}
+                className="inbox-manager-select min-w-0 flex-1 rounded-lg border border-border bg-background py-1 pl-2.5 pr-8 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+              >
+                <option value="">Все</option>
+                {managers.map((item) => (
+                  <option key={item.code} value={item.code}>
+                    {item.name}
+                  </option>
+                ))}
+              </select>
+            ) : null}
+          </div>
           {emptyList ? (
             <div className="rounded-xl border border-dashed border-border bg-background/40 px-3 py-4">
               <p className="font-heading text-sm">Клиентов пока нет</p>
@@ -323,6 +383,9 @@ export function InboxView({
                         active ? "bg-accent ring-1 ring-primary/40" : "hover:bg-muted/50"
                       }`}
                     >
+                      {role === "chief" && item.managerName ? (
+                        <div className="truncate text-xs text-muted-foreground">{item.managerName}</div>
+                      ) : null}
                       <div className="font-heading text-sm">{item.clientName}</div>
                       <div className="truncate text-xs text-foreground/80">{item.subject}</div>
                       <div className="truncate text-xs text-muted-foreground">{item.preview}</div>
@@ -337,11 +400,24 @@ export function InboxView({
 
         <section className="flex min-h-0 flex-col overflow-hidden">
           {selected ? (
-            <div className="shrink-0 border-b border-border px-6 py-4">
-              <div className="mx-auto w-full max-w-3xl">
-                <h1 className="font-heading text-xl">{selected.clientName}</h1>
-                <p className="text-sm text-foreground/80">{selected.subject}</p>
-                <p className="text-sm text-muted-foreground">{selected.clientEmail}</p>
+            <div className="shrink-0 border-b border-border px-6 py-2">
+              <div className="flex min-w-0 items-center justify-between gap-3">
+                <div className="flex min-w-0 flex-col gap-0.5">
+                  <div className="flex min-w-0 items-baseline gap-2">
+                    <h1 className="font-heading truncate text-base tracking-tight">
+                      {selected.clientName}
+                    </h1>
+                    <p className="min-w-0 truncate text-sm text-muted-foreground">
+                      {selected.clientEmail}
+                    </p>
+                  </div>
+                  <p className="truncate text-sm text-foreground/80">{selected.subject}</p>
+                </div>
+                {role === "chief" && selected.managerName ? (
+                  <p className="shrink-0 text-base text-muted-foreground">
+                    Менеджер: {selected.managerName}
+                  </p>
+                ) : null}
               </div>
             </div>
           ) : null}
@@ -426,22 +502,19 @@ export function InboxView({
               </div>
             )}
           </div>
-          <div className="shrink-0 space-y-3 border-t border-border bg-card/30 p-4">
-            {canReply ? (
+          {canReply ? (
+            <div className="shrink-0 space-y-3 border-t border-border bg-card/30 p-4">
               <Textarea
+                ref={replyRef}
                 disabled={!selected || sending}
                 value={draft}
                 onChange={(event) => setDraft(event.target.value)}
                 placeholder="Ответ клиенту"
                 aria-label="Ответ клиенту"
-                className="max-h-40 min-h-16 resize-none overflow-y-auto"
-                style={{ fieldSizing: "fixed" }}
+                wrap="soft"
+                className="field-sizing-fixed min-h-16 max-h-56 resize-none overflow-x-hidden overflow-y-auto px-3.5 py-3 text-sm leading-relaxed break-words [overflow-wrap:anywhere] [scrollbar-gutter:stable]"
               />
-            ) : (
-              <p className="text-sm text-muted-foreground">Главный не отвечает клиентам.</p>
-            )}
-            <div className="flex flex-wrap items-center gap-2">
-              {canReply ? (
+              <div className="flex flex-wrap items-center gap-2">
                 <Button
                   disabled={!selected || sending || !draft.trim()}
                   onClick={() => void onSend()}
@@ -455,30 +528,26 @@ export function InboxView({
                     "Отправить"
                   )}
                 </Button>
-              ) : null}
-              <Button
-                variant="outline"
-                disabled={!selected || travelBusy}
-                onClick={() => void onSuggest()}
-              >
-                {travelBusy ? (
-                  <>
-                    <span className="busy-dot" aria-hidden />
-                    ИИ думает…
-                  </>
-                ) : (
-                  "Подобрать решение"
-                )}
-              </Button>
-              <span className="text-sm text-muted-foreground">
-                {selected
-                  ? canReply
-                    ? "ответ уйдёт на почту клиента"
-                    : "подбор только для сотрудников"
-                  : "выберите клиента"}
-              </span>
+                <Button
+                  variant="outline"
+                  disabled={!selected || travelBusy}
+                  onClick={() => void onSuggest()}
+                >
+                  {travelBusy ? (
+                    <>
+                      <span className="busy-dot" aria-hidden />
+                      ИИ думает…
+                    </>
+                  ) : (
+                    "Подобрать решение"
+                  )}
+                </Button>
+                <span className="text-sm text-muted-foreground">
+                  {selected ? "ответ уйдёт на почту клиента" : "выберите клиента"}
+                </span>
+              </div>
             </div>
-          </div>
+          ) : null}
         </section>
       </div>
     </div>

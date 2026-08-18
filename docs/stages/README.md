@@ -24,6 +24,7 @@
 | 9.3. Актуальная заявка в подборе | `stage/09-3-travel-agent-upgrade` | [09-3-travel-agent-upgrade.md](09-3-travel-agent-upgrade.md) | Правка дат подхватывается; без дат — уточнить; одиночке twin при дыре в standard; «Питер» в теме не штрафует тело |
 | 9.4. Масштаб динамики оценки | `stage/09-4-admin-score-trend` | [09-4-admin-score-trend.md](09-4-admin-score-trend.md) | За сегодня видно несколько точек в масштабе «Ответы» |
 | 9.5. Прокрутка в тон темы | `stage/09-5-scrollbars` | [09-5-scrollbars.md](09-5-scrollbars.md) | Нет белого ползунка со стрелками ни на одном экране |
+| 9.6. Правки UI после прокрутки | `stage/09-6-ui-more-fixes` | [09-6-ui-more-fixes.md](09-6-ui-more-fixes.md) | Консоль/Почта, Onest, фильтр не закрывает ленту, https://assistant.gyhyry.com |
 
 ## Как агент ведёт этап
 

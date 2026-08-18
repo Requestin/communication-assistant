@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { SESSION_COOKIE, verifySession } from "@/lib/auth";
 import { authorizeRequest } from "@/lib/auth-guard";
+import { publicOriginFromHeaders } from "@/lib/public-origin";
 
 export async function middleware(request: NextRequest) {
   const token = request.cookies.get(SESSION_COOKIE)?.value ?? "";
@@ -8,7 +9,8 @@ export async function middleware(request: NextRequest) {
   const decision = authorizeRequest(request.nextUrl.pathname, request.method, session);
 
   if (decision.type === "redirect") {
-    return NextResponse.redirect(new URL(decision.to, request.url));
+    const origin = publicOriginFromHeaders(request.headers, request.url);
+    return NextResponse.redirect(new URL(decision.to, origin));
   }
 
   if (decision.type === "json") {
