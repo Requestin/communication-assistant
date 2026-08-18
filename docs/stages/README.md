@@ -16,6 +16,7 @@
 | 4. Ответ с сайта | `stage/04-smtp` | [04-smtp.md](04-smtp.md) | Ответ с сайта доходит клиенту, chief не шлёт |
 | 5. Агент качества | `stage/05-quality-agent` | [05-quality-agent.md](05-quality-agent.md) | Плохой ответ даёт жёлтую карточку |
 | 6. Подбор командировки | `stage/06-travel-agent` | [06-travel-agent.md](06-travel-agent.md) | Петербург собирается, Томск — вежливый отказ |
+| 6.1. Правки подбора и лент | уже в PR #9 (`stage/06-travel-agent`) | [06-1-fix-travel-agent.md](06-1-fix-travel-agent.md) | Сумма сходится на глаз, разные темы — разные ленты, новое IMAP-письмо видно |
 | 7. Админка | `stage/07-admin` | [07-admin.md](07-admin.md) | Главный видит разницу между менеджерами |
 | 8. Демо-полировка | `stage/08-demo-polish` | [08-demo-polish.md](08-demo-polish.md) | Стенд на 127.0.0.1, README со сценарием, `.env` не в git |
 

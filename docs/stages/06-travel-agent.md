@@ -12,6 +12,8 @@
 Зависимость: [05-quality-agent.md](05-quality-agent.md) влит в `main`  
 PR: `[stage 06] Подбор пакета авиа плюс отель`
 
+После ручной проверки стенда правки суммы, IMAP-полла и лент по теме — в [06-1-fix-travel-agent.md](06-1-fix-travel-agent.md) (тот же PR #9).
+
 ## Скиллы
 
 - Модель: `local-llm-json` + `comm-ui`
