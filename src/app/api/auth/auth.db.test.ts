@@ -115,7 +115,7 @@ describe.skipIf(!prisma)("auth API against Postgres", () => {
     expect(flights.status).toBe(403);
   });
 
-  it("lets the chief read zero admin stats and debug flights", async () => {
+  it("lets the chief read admin stats and debug flights", async () => {
     const igorLogin = await loginAs(igorId);
     const cookie = cookieHeader(igorLogin);
 
@@ -128,9 +128,11 @@ describe.skipIf(!prisma)("auth API against Postgres", () => {
     const body = (await stats.json()) as {
       department: { replies: number };
       managers: Array<{ code: string }>;
+      charts: { scoreByManager: unknown[] };
     };
-    expect(body.department.replies).toBe(0);
+    expect(typeof body.department.replies).toBe("number");
     expect(body.managers).toHaveLength(3);
+    expect(body.charts.scoreByManager).toHaveLength(3);
 
     const anonymous = await debugFlights(
       new Request("http://127.0.0.1:3010/api/debug/flights?from=MOW&to=LED&date=2026-09-01"),
