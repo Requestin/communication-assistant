@@ -47,3 +47,15 @@ export function imapPollMs(): number {
   const seconds = Number(readEnv("IMAP_POLL_SECONDS") || "15");
   return (Number.isFinite(seconds) && seconds > 0 ? seconds : 15) * 1000;
 }
+
+export function smtpSettings(): { host: string; port: number } {
+  return {
+    host: readEnv("SMTP_HOST") || "smtp.gmail.com",
+    port: Number(readEnv("SMTP_PORT") || "587"),
+  };
+}
+
+export function findMailboxAccount(email: string): MailboxAccount | null {
+  const needle = email.trim().toLowerCase();
+  return loadMailboxAccounts().ready.find((box) => box.email === needle) ?? null;
+}

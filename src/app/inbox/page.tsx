@@ -14,7 +14,10 @@ export default async function InboxPage() {
   return (
     <div className="flex min-h-screen flex-col">
       <AppHeader name={session.name} role={session.role} />
-      <InboxView pollSeconds={Number.isFinite(pollSeconds) && pollSeconds > 0 ? pollSeconds : 5} />
+      <InboxView
+        role={session.role}
+        pollSeconds={Number.isFinite(pollSeconds) && pollSeconds > 0 ? pollSeconds : 5}
+      />
     </div>
   );
 }

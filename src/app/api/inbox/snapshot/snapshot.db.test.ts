@@ -91,13 +91,17 @@ describe.skipIf(!prisma)("GET /api/inbox/snapshot", () => {
     );
     expect(list.status).toBe(200);
     const body = (await list.json()) as InboxSnapshotDto;
-    expect(body.conversations).toHaveLength(1);
-    expect(body.conversations[0]?.clientEmail).toBe("imap-test-anna@example.com");
+    const emails = body.conversations.map((item) => item.clientEmail);
+    expect(emails).toContain("imap-test-anna@example.com");
+    expect(emails).not.toContain("imap-test-dmitry@example.com");
     expect(body.notes).toEqual([]);
+    const annaThread = body.conversations.find(
+      (item) => item.clientEmail === "imap-test-anna@example.com",
+    );
 
     const thread = await snapshot(
       new Request(
-        `http://127.0.0.1:3010/api/inbox/snapshot?conversationId=${body.conversations[0]?.id}`,
+        `http://127.0.0.1:3010/api/inbox/snapshot?conversationId=${annaThread?.id}`,
         { headers: { cookie } },
       ),
     );
@@ -119,7 +123,7 @@ describe.skipIf(!prisma)("GET /api/inbox/snapshot", () => {
 
     const afterDup = await snapshot(
       new Request(
-        `http://127.0.0.1:3010/api/inbox/snapshot?conversationId=${body.conversations[0]?.id}`,
+        `http://127.0.0.1:3010/api/inbox/snapshot?conversationId=${annaThread?.id}`,
         { headers: { cookie } },
       ),
     );
