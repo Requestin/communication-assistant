@@ -1076,8 +1076,8 @@ returnFlights = то же на dateTo, города наоборот, если n
 ```gitignore
 /gmail_imap_test.py
 .env
-.env.local
-.env.*.local
+.env.*
+!.env.example
 node_modules/
 .next/
 dist/

@@ -20,6 +20,10 @@ describe("demo bind and secrets", () => {
   it("ignores .env and keeps example passwords empty", () => {
     const ignored = execFileSync("git", ["check-ignore", "-v", ".env"], { encoding: "utf8" });
     expect(ignored).toMatch(/\.env/);
+    expect(
+      execFileSync("git", ["check-ignore", "-v", "gmail_imap_test.py"], { encoding: "utf8" }),
+    ).toMatch(/gmail_imap_test\.py/);
+    expect(() => execFileSync("git", ["check-ignore", "-v", "PROMPT.md"])).toThrow();
     const example = readFileSync(".env.example", "utf8");
     expect(example).toMatch(/GMAIL_M36_APP_PASSWORD=\s*$/m);
     expect(example).toMatch(/GMAIL_M52_APP_PASSWORD=\s*$/m);
