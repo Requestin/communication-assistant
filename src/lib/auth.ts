@@ -24,31 +24,45 @@ function getSessionSecret(override?: string): Uint8Array {
   return new TextEncoder().encode(secret);
 }
 
-export function sessionCookieOptions(): {
+export function isHttpsRequest(request?: Request): boolean {
+  if (!request) {
+    return false;
+  }
+  const forwarded = request.headers.get("x-forwarded-proto");
+  if (forwarded) {
+    return forwarded.split(",")[0]?.trim() === "https";
+  }
+  try {
+    return new URL(request.url).protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+export function sessionCookieOptions(request?: Request): {
   httpOnly: true;
   sameSite: "lax";
   path: "/";
   maxAge: number;
   secure: boolean;
 } {
-  const appUrl = process.env.APP_URL ?? "http://127.0.0.1:3010";
   return {
     httpOnly: true,
     sameSite: "lax",
     path: "/",
     maxAge: SESSION_TTL_SECONDS,
-    secure: appUrl.startsWith("https://"),
+    secure: isHttpsRequest(request),
   };
 }
 
-export function clearSessionCookieOptions(): {
+export function clearSessionCookieOptions(request?: Request): {
   httpOnly: true;
   sameSite: "lax";
   path: "/";
   maxAge: number;
   secure: boolean;
 } {
-  return { ...sessionCookieOptions(), maxAge: 0 };
+  return { ...sessionCookieOptions(request), maxAge: 0 };
 }
 
 export async function signSession(

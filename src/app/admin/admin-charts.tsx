@@ -36,12 +36,12 @@ type ChartCardProps = {
 
 function ChartCard({ title, empty, actions, children }: ChartCardProps) {
   return (
-    <section className="rounded-xl border border-border bg-card/80 p-4">
-      <div className="mb-3 flex flex-col gap-2">
+    <section className="flex h-full flex-col rounded-xl border border-border bg-card/80 p-4">
+      <div className="mb-3 flex shrink-0 flex-col gap-2">
         <h3 className="font-heading text-sm">{title}</h3>
         {actions}
       </div>
-      <div className="relative h-52">
+      <div className="relative min-h-52 flex-1">
         {children}
         {empty ? (
           <p className="pointer-events-none absolute inset-0 flex items-center justify-center text-sm text-muted-foreground">
@@ -87,8 +87,8 @@ function TrendScaleSwitch({
             onClick={() => onChange(option.id)}
             className={
               selected
-                ? "rounded-md bg-primary px-2 py-1 text-center text-[11px] font-medium text-primary-foreground"
-                : "rounded-md px-2 py-1 text-center text-[11px] text-muted-foreground hover:text-foreground"
+                ? "flex h-[25px] items-center justify-center rounded-md bg-primary px-1 text-center text-base leading-none font-medium text-primary-foreground"
+                : "flex h-[25px] items-center justify-center rounded-md px-1 text-center text-base leading-none text-muted-foreground hover:text-foreground"
             }
           >
             {option.label}

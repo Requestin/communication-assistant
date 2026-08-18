@@ -1,6 +1,6 @@
 ---
 name: comm-ui
-description: Visual system for the communication-assistant pilot. Use when editing tsx, CSS, login/inbox/admin, or any UI styling. Read DESIGN.md first and keep graphite plus amber, Golos Text, and Unbounded.
+description: Visual system for the communication-assistant pilot. Use when editing tsx, CSS, login/inbox/admin, or any UI styling. Read DESIGN.md first and keep graphite plus amber, Golos Text, and Onest.
 ---
 
 # comm-ui
@@ -10,7 +10,7 @@ description: Visual system for the communication-assistant pilot. Use when editi
 ## Обязательно
 
 - Тема по умолчанию тёмная: тёплый графит, акцент янтарь.
-- Текст UI — **Golos Text**. Заголовки и имена на входе — **Unbounded**.
+- Текст UI — **Golos Text**. Заголовки и имена на входе — **Onest**.
 - Интерфейс на русском. shadcn + Tailwind, без новой UI-библиотеки.
 - Анимации только CSS / `tw-animate-css`, точечно. `prefers-reduced-motion: reduce` — без движения.
 - Служебные карточки ИИ остаются янтарными и не уходят в SMTP.

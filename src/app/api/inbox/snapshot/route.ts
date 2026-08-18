@@ -22,8 +22,9 @@ export async function GET(request: Request) {
   const since = parseSince(url.searchParams.get("since"));
   const managerCode = url.searchParams.get("manager");
 
-  let managerId: string | undefined = auth.session.id;
-  if (auth.session.role === "chief") {
+  const isChief = auth.session.role === "chief";
+  let listManagerId: string | undefined = auth.session.id;
+  if (isChief) {
     if (managerCode) {
       const manager = await prisma.user.findUnique({
         where: { code: managerCode },
@@ -32,13 +33,19 @@ export async function GET(request: Request) {
       if (!manager || manager.role !== "manager") {
         return NextResponse.json({ error: "Менеджер не найден" }, { status: 404 });
       }
-      managerId = manager.id;
+      listManagerId = manager.id;
     } else {
-      managerId = undefined;
+      listManagerId = undefined;
     }
   }
 
   return NextResponse.json(
-    await buildInboxSnapshot(prisma, { managerId, conversationId, since }),
+    await buildInboxSnapshot(prisma, {
+      managerId: listManagerId,
+      accessManagerId: isChief ? undefined : auth.session.id,
+      conversationId,
+      since,
+      includeManagers: isChief,
+    }),
   );
 }

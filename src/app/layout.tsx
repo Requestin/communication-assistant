@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Golos_Text, Unbounded } from "next/font/google";
+import { Golos_Text, Onest } from "next/font/google";
 import "./globals.css";
 
 const golos = Golos_Text({
@@ -7,13 +7,13 @@ const golos = Golos_Text({
   subsets: ["cyrillic", "latin"],
 });
 
-const unbounded = Unbounded({
-  variable: "--font-unbounded",
+const onest = Onest({
+  variable: "--font-onest",
   subsets: ["cyrillic", "latin"],
 });
 
 export const metadata: Metadata = {
-  title: "Помощник в коммуникации",
+  title: "AI Помощник",
   description: "Пилот сервиса для менеджеров командировок",
 };
 
@@ -24,7 +24,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ru" className="dark">
-      <body className={`${golos.variable} ${unbounded.variable} antialiased`}>
+      <body className={`${golos.variable} ${onest.variable} antialiased`}>
         {children}
       </body>
     </html>

@@ -38,6 +38,6 @@ export async function POST(request: Request) {
   });
 
   const response = NextResponse.json(toPublicUser(user));
-  response.cookies.set(SESSION_COOKIE, token, sessionCookieOptions());
+  response.cookies.set(SESSION_COOKIE, token, sessionCookieOptions(request));
   return response;
 }

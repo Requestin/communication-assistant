@@ -18,15 +18,13 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
   const pollSeconds = Number(process.env.INBOX_POLL_SECONDS ?? "5");
   const requestedCode = params.manager?.trim();
   let managerCode: string | undefined;
-  let managerName: string | undefined;
   if (session.role === "chief" && requestedCode) {
     const manager = await prisma.user.findUnique({
       where: { code: requestedCode },
-      select: { name: true, role: true, code: true },
+      select: { role: true, code: true },
     });
     if (manager?.role === "manager") {
       managerCode = manager.code;
-      managerName = manager.name;
     }
   }
 
@@ -37,7 +35,6 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
         role={session.role}
         pollSeconds={Number.isFinite(pollSeconds) && pollSeconds > 0 ? pollSeconds : 5}
         managerCode={managerCode}
-        managerName={managerName}
         initialConversationId={params.conversation}
       />
     </div>

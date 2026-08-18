@@ -29,6 +29,7 @@ async function loginAs(userId: string): Promise<Response> {
 describe.skipIf(!prisma)("GET /api/inbox/snapshot", () => {
   let annaId = "";
   let dmitryId = "";
+  let igorId = "";
 
   beforeAll(async () => {
     if (!prisma) {
@@ -38,6 +39,7 @@ describe.skipIf(!prisma)("GET /api/inbox/snapshot", () => {
     const users = await prisma.user.findMany({ select: { id: true, code: true } });
     annaId = users.find((user) => user.code === "M36")?.id ?? "";
     dmitryId = users.find((user) => user.code === "M52")?.id ?? "";
+    igorId = users.find((user) => user.code === "CHIEF")?.id ?? "";
   });
 
   beforeEach(async () => {
@@ -73,7 +75,7 @@ describe.skipIf(!prisma)("GET /api/inbox/snapshot", () => {
         text: "Письмо Анне",
       }),
     });
-    await ingestInbound(prisma!, {
+    const dmitryInbound = await ingestInbound(prisma!, {
       managerId: dmitryId,
       managerEmail: "communicationassistant52@gmail.com",
       gmailUid: "2002",
@@ -84,6 +86,9 @@ describe.skipIf(!prisma)("GET /api/inbox/snapshot", () => {
         text: "Чужое письмо",
       }),
     });
+    if (dmitryInbound.status !== "created") {
+      throw new Error("failed to seed dmitry thread");
+    }
 
     const cookie = cookieHeader(await loginAs(annaId));
     const list = await snapshot(
@@ -95,6 +100,7 @@ describe.skipIf(!prisma)("GET /api/inbox/snapshot", () => {
     expect(emails).toContain("imap-test-anna@example.com");
     expect(emails).not.toContain("imap-test-dmitry@example.com");
     expect(body.notes).toEqual([]);
+    expect(body.managers).toBeUndefined();
     const annaThread = body.conversations.find(
       (item) => item.clientEmail === "imap-test-anna@example.com",
     );
@@ -108,6 +114,17 @@ describe.skipIf(!prisma)("GET /api/inbox/snapshot", () => {
     const threadBody = (await thread.json()) as InboxSnapshotDto;
     expect(threadBody.messages).toHaveLength(1);
     expect(threadBody.messages[0]?.bodyText).toBe("Письмо Анне");
+    expect(threadBody.openConversation?.id).toBe(annaThread?.id);
+
+    const leaked = await snapshot(
+      new Request(
+        `http://127.0.0.1:3010/api/inbox/snapshot?conversationId=${dmitryInbound.conversationId}`,
+        { headers: { cookie } },
+      ),
+    );
+    const leakedBody = (await leaked.json()) as InboxSnapshotDto;
+    expect(leakedBody.messages).toEqual([]);
+    expect(leakedBody.openConversation).toBeUndefined();
 
     const again = await ingestInbound(prisma!, {
       managerId: annaId,
@@ -129,6 +146,74 @@ describe.skipIf(!prisma)("GET /api/inbox/snapshot", () => {
     );
     const afterDupBody = (await afterDup.json()) as InboxSnapshotDto;
     expect(afterDupBody.messages).toHaveLength(1);
+  });
+
+  it("lets the chief see all threads with manager names, or filter to one manager", async () => {
+    await ingestInbound(prisma!, {
+      managerId: annaId,
+      managerEmail: "communicationassistant36@gmail.com",
+      gmailUid: "2401",
+      parsed: parseMailFields({
+        fromEmail: "imap-test-chief-anna@example.com",
+        fromName: "Клиент Анны",
+        subject: "Анне",
+        text: "Письмо Анне",
+      }),
+    });
+    await ingestInbound(prisma!, {
+      managerId: dmitryId,
+      managerEmail: "communicationassistant52@gmail.com",
+      gmailUid: "2402",
+      parsed: parseMailFields({
+        fromEmail: "imap-test-chief-dmitry@example.com",
+        fromName: "Клиент Дмитрия",
+        subject: "Дмитрию",
+        text: "Письмо Дмитрию",
+      }),
+    });
+
+    const cookie = cookieHeader(await loginAs(igorId));
+    const all = await snapshot(
+      new Request("http://127.0.0.1:3010/api/inbox/snapshot", { headers: { cookie } }),
+    );
+    expect(all.status).toBe(200);
+    const allBody = (await all.json()) as InboxSnapshotDto;
+    const byEmail = Object.fromEntries(
+      allBody.conversations.map((item) => [item.clientEmail, item]),
+    );
+    expect(byEmail["imap-test-chief-anna@example.com"]?.managerName).toBe("Анна Соколова");
+    expect(byEmail["imap-test-chief-anna@example.com"]?.managerCode).toBe("M36");
+    expect(byEmail["imap-test-chief-dmitry@example.com"]?.managerName).toBe("Дмитрий Орлов");
+    expect(allBody.managers?.map((item) => item.code).sort()).toEqual(["M36", "M52", "M65"]);
+
+    const filtered = await snapshot(
+      new Request("http://127.0.0.1:3010/api/inbox/snapshot?manager=M36", {
+        headers: { cookie },
+      }),
+    );
+    const filteredBody = (await filtered.json()) as InboxSnapshotDto;
+    const emails = filteredBody.conversations.map((item) => item.clientEmail);
+    expect(emails).toContain("imap-test-chief-anna@example.com");
+    expect(emails).not.toContain("imap-test-chief-dmitry@example.com");
+    expect(filteredBody.managers?.some((item) => item.code === "M36")).toBe(true);
+
+    const dmitryThread = allBody.conversations.find(
+      (item) => item.clientEmail === "imap-test-chief-dmitry@example.com",
+    );
+    const kept = await snapshot(
+      new Request(
+        `http://127.0.0.1:3010/api/inbox/snapshot?manager=M36&conversationId=${dmitryThread?.id}`,
+        { headers: { cookie } },
+      ),
+    );
+    const keptBody = (await kept.json()) as InboxSnapshotDto;
+    expect(keptBody.conversations.map((item) => item.clientEmail)).not.toContain(
+      "imap-test-chief-dmitry@example.com",
+    );
+    expect(keptBody.messages).toHaveLength(1);
+    expect(keptBody.messages[0]?.bodyText).toBe("Письмо Дмитрию");
+    expect(keptBody.openConversation?.clientEmail).toBe("imap-test-chief-dmitry@example.com");
+    expect(keptBody.openConversation?.managerName).toBe("Дмитрий Орлов");
   });
 
   it("returns staff quality notes only for the open thread", async () => {
