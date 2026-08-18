@@ -1,4 +1,4 @@
-import type { AiNote, Message, PrismaClient } from "@prisma/client";
+import type { AiNote, Job, Message, PrismaClient } from "@prisma/client";
 
 export type InboxConversationDto = {
   id: string;
@@ -35,12 +35,20 @@ export type InboxNoteDto = {
   businessStyle: number | null;
   overall: number | null;
   issues: string[];
+  payload: Record<string, unknown>;
+};
+
+export type InboxSuggestJobDto = {
+  id: string;
+  type: "suggest_travel";
+  status: "pending" | "processing";
 };
 
 export type InboxSnapshotDto = {
   conversations: InboxConversationDto[];
   messages: InboxMessageDto[];
   notes: InboxNoteDto[];
+  jobs: InboxSuggestJobDto[];
 };
 
 const PREVIEW_LEN = 160;
@@ -78,11 +86,15 @@ function asIssues(value: unknown): string[] {
   return value.filter((item): item is string => typeof item === "string");
 }
 
+function asPayload(value: unknown): Record<string, unknown> {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  return {};
+}
+
 export function toNoteDto(note: AiNote): InboxNoteDto {
-  const payload =
-    note.payload && typeof note.payload === "object" && !Array.isArray(note.payload)
-      ? (note.payload as Record<string, unknown>)
-      : {};
+  const payload = asPayload(note.payload);
   return {
     id: note.id,
     conversationId: note.conversationId,
@@ -97,7 +109,18 @@ export function toNoteDto(note: AiNote): InboxNoteDto {
     businessStyle: asScore(payload.businessStyle),
     overall: asScore(payload.overall),
     issues: asIssues(payload.issues),
+    payload,
   };
+}
+
+export function toSuggestJobDto(job: Pick<Job, "id" | "type" | "status">): InboxSuggestJobDto | null {
+  if (job.type !== "suggest_travel") {
+    return null;
+  }
+  if (job.status !== "pending" && job.status !== "processing") {
+    return null;
+  }
+  return { id: job.id, type: job.type, status: job.status };
 }
 
 export async function buildInboxSnapshot(
@@ -127,15 +150,15 @@ export async function buildInboxSnapshot(
   }));
 
   if (!options.conversationId) {
-    return { conversations: conversationDtos, messages: [], notes: [] };
+    return { conversations: conversationDtos, messages: [], notes: [], jobs: [] };
   }
 
   const owned = conversations.some((item) => item.id === options.conversationId);
   if (!owned) {
-    return { conversations: conversationDtos, messages: [], notes: [] };
+    return { conversations: conversationDtos, messages: [], notes: [], jobs: [] };
   }
 
-  const [messages, notes] = await Promise.all([
+  const [messages, notes, jobs] = await Promise.all([
     prisma.message.findMany({
       where: {
         conversationId: options.conversationId,
@@ -150,11 +173,24 @@ export async function buildInboxSnapshot(
       },
       orderBy: { createdAt: "asc" },
     }),
+    prisma.job.findMany({
+      where: {
+        conversationId: options.conversationId,
+        type: "suggest_travel",
+        status: { in: ["pending", "processing"] },
+      },
+      orderBy: { createdAt: "asc" },
+      select: { id: true, type: true, status: true },
+    }),
   ]);
 
   return {
     conversations: conversationDtos,
     messages: messages.map(toMessageDto),
     notes: notes.map(toNoteDto),
+    jobs: jobs.flatMap((job) => {
+      const dto = toSuggestJobDto(job);
+      return dto ? [dto] : [];
+    }),
   };
 }

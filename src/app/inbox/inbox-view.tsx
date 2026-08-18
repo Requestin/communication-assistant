@@ -4,8 +4,15 @@ import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import type { UserRole } from "@/lib/auth";
-import type { InboxConversationDto, InboxMessageDto, InboxNoteDto, InboxSnapshotDto } from "@/lib/inbox";
+import type {
+  InboxConversationDto,
+  InboxMessageDto,
+  InboxNoteDto,
+  InboxSnapshotDto,
+  InboxSuggestJobDto,
+} from "@/lib/inbox";
 import { QualityNoteCard } from "./quality-note";
+import { TravelOfferCard } from "./travel-offer";
 
 type InboxViewProps = {
   pollSeconds: number;
@@ -67,11 +74,15 @@ export function InboxView({ pollSeconds, role, managerCode }: InboxViewProps) {
   const [conversations, setConversations] = useState<InboxConversationDto[]>([]);
   const [messages, setMessages] = useState<InboxMessageDto[]>([]);
   const [notes, setNotes] = useState<InboxNoteDto[]>([]);
+  const [jobs, setJobs] = useState<InboxSuggestJobDto[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
+  const [suggesting, setSuggesting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const canReply = role === "manager";
+  const travelBusy =
+    suggesting || jobs.some((job) => job.status === "pending" || job.status === "processing");
 
   const load = useCallback(async () => {
     if (document.visibilityState !== "visible") {
@@ -101,6 +112,7 @@ export function InboxView({ pollSeconds, role, managerCode }: InboxViewProps) {
     if (selectedId) {
       setMessages((previous) => mergeMessages(body.messages, previous));
       setNotes(body.notes);
+      setJobs(body.jobs ?? []);
     }
   }, [managerCode, selectedId]);
 
@@ -125,7 +137,7 @@ export function InboxView({ pollSeconds, role, managerCode }: InboxViewProps) {
   const selected = conversations.find((item) => item.id === selectedId) ?? null;
   const emptyList = conversations.length === 0;
   const timeline = buildTimeline(messages, notes);
-  const threadEmpty = timeline.length === 0;
+  const threadEmpty = timeline.length === 0 && !travelBusy;
 
   async function onSend() {
     if (!selected || !canReply || sending) {
@@ -182,10 +194,42 @@ export function InboxView({ pollSeconds, role, managerCode }: InboxViewProps) {
     }
   }
 
+  async function onSuggest() {
+    if (!selected || suggesting) {
+      return;
+    }
+    setSuggesting(true);
+    setError(null);
+    try {
+      const response = await fetch(`/api/conversations/${selected.id}/suggest`, {
+        method: "POST",
+      });
+      const payload = (await response.json().catch(() => ({}))) as {
+        error?: string;
+        jobId?: string;
+        status?: string;
+      };
+      if (!response.ok || !payload.jobId) {
+        setError(payload.error ?? "Не удалось поставить подбор");
+        setSuggesting(false);
+        return;
+      }
+      await load();
+    } catch {
+      setError("Не удалось поставить подбор");
+    } finally {
+      setSuggesting(false);
+    }
+  }
+
+  function insertOffer(text: string) {
+    setDraft((current) => (current.trim() ? `${current.trim()}\n\n${text}` : text));
+  }
+
   return (
     <div className="grid min-h-0 flex-1 grid-cols-1 md:grid-cols-[20rem_1fr]">
       <aside className="border-b border-border bg-card/40 p-5 md:border-r md:border-b-0">
-        <h2 className="mb-3 text-sm font-medium text-muted-foreground">Клиенты</h2>
+        <h2 className="mb-3 text-sm font-medium text-muted-foreground">Диалоги</h2>
         {emptyList ? (
           <p className="text-sm text-muted-foreground">Список пуст.</p>
         ) : (
@@ -200,14 +244,17 @@ export function InboxView({ pollSeconds, role, managerCode }: InboxViewProps) {
                       setSelectedId(item.id);
                       setMessages([]);
                       setNotes([]);
+                      setJobs([]);
                       setDraft("");
+                      setSuggesting(false);
                     }}
                     className={`pressable w-full rounded-lg px-3 py-2 text-left ${
                       active ? "bg-accent ring-1 ring-primary/40" : "hover:bg-muted/50"
                     }`}
                   >
                     <div className="font-heading text-sm">{item.clientName}</div>
-                    <div className="truncate text-xs text-muted-foreground">{item.preview || item.subject}</div>
+                    <div className="truncate text-xs text-foreground/80">{item.subject}</div>
+                    <div className="truncate text-xs text-muted-foreground">{item.preview}</div>
                     <div className="mt-1 text-xs text-muted-foreground">{formatTime(item.lastMessageAt)}</div>
                   </button>
                 </li>
@@ -223,11 +270,11 @@ export function InboxView({ pollSeconds, role, managerCode }: InboxViewProps) {
           {!selected ? (
             <div className="flex flex-1 items-center justify-center text-center">
               <div className="max-w-md space-y-2">
-                <p className="font-heading text-lg">{emptyList ? "Лента пуста" : "Выберите клиента"}</p>
+                <p className="font-heading text-lg">{emptyList ? "Лента пуста" : "Выберите диалог"}</p>
                 <p className="text-muted-foreground">
                   {emptyList
                     ? "Писем ещё нет. Клиент должен написать на ваш Gmail."
-                    : "Слева список клиентов. Письма подтянутся сами."}
+                    : "Слева список диалогов по темам писем."}
                 </p>
               </div>
             </div>
@@ -235,6 +282,7 @@ export function InboxView({ pollSeconds, role, managerCode }: InboxViewProps) {
             <div className="mx-auto flex w-full max-w-3xl flex-col gap-3">
               <div>
                 <h1 className="font-heading text-xl">{selected.clientName}</h1>
+                <p className="text-sm text-foreground/80">{selected.subject}</p>
                 <p className="text-sm text-muted-foreground">{selected.clientEmail}</p>
               </div>
               {threadEmpty ? (
@@ -242,7 +290,16 @@ export function InboxView({ pollSeconds, role, managerCode }: InboxViewProps) {
               ) : (
                 timeline.map((item) =>
                   item.kind === "note" ? (
-                    <QualityNoteCard key={item.id} note={item.note} />
+                    item.note.type === "travel_offer" ? (
+                      <TravelOfferCard
+                        key={item.id}
+                        note={item.note}
+                        canInsert={canReply}
+                        onInsert={insertOffer}
+                      />
+                    ) : (
+                      <QualityNoteCard key={item.id} note={item.note} />
+                    )
                   ) : (
                     <article
                       key={item.id}
@@ -261,11 +318,20 @@ export function InboxView({ pollSeconds, role, managerCode }: InboxViewProps) {
                   ),
                 )
               )}
+              {travelBusy ? (
+                <div
+                  role="status"
+                  aria-live="polite"
+                  className="w-full rounded-xl border border-primary/45 bg-primary/12 px-4 py-3 text-sm"
+                >
+                  ИИ подбирает варианты…
+                </div>
+              ) : null}
             </div>
           )}
         </div>
-        {canReply ? (
-          <div className="space-y-3 border-t border-border bg-card/30 p-4">
+        <div className="space-y-3 border-t border-border bg-card/30 p-4">
+          {canReply ? (
             <Textarea
               disabled={!selected || sending}
               value={draft}
@@ -273,26 +339,34 @@ export function InboxView({ pollSeconds, role, managerCode }: InboxViewProps) {
               placeholder="Ответ клиенту"
               aria-label="Ответ клиенту"
             />
-            <div className="flex flex-wrap items-center gap-2">
+          ) : (
+            <p className="text-sm text-muted-foreground">Главный не отвечает клиентам.</p>
+          )}
+          <div className="flex flex-wrap items-center gap-2">
+            {canReply ? (
               <Button
                 disabled={!selected || sending || !draft.trim()}
                 onClick={() => void onSend()}
               >
                 Отправить
               </Button>
-              <Button variant="outline" disabled title="подбор будет позже">
-                Подобрать решение
-              </Button>
-              <span className="text-sm text-muted-foreground">
-                {selected ? "ответ уйдёт на почту клиента" : "выберите клиента"}
-              </span>
-            </div>
+            ) : null}
+            <Button
+              variant="outline"
+              disabled={!selected || travelBusy}
+              onClick={() => void onSuggest()}
+            >
+              Подобрать решение
+            </Button>
+            <span className="text-sm text-muted-foreground">
+              {selected
+                ? canReply
+                  ? "ответ уйдёт на почту клиента"
+                  : "подбор только для сотрудников"
+                : "выберите клиента"}
+            </span>
           </div>
-        ) : (
-          <div className="border-t border-border bg-card/30 p-4 text-sm text-muted-foreground">
-            Главный не отвечает клиентам.
-          </div>
-        )}
+        </div>
       </section>
     </div>
   );

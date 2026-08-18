@@ -47,4 +47,16 @@ describe("completeJson", () => {
     setLlmRawCompleteForTests(async () => "still not json");
     await expect(completeJson("sys", "user", "quality")).rejects.toBeInstanceOf(LlmJsonError);
   });
+
+  it("passes the requested temperature into the raw complete hook", async () => {
+    const seen: number[] = [];
+    setLlmRawCompleteForTests(async ({ temperature }) => {
+      seen.push(temperature);
+      return '{"ok":true}';
+    });
+    await completeJson("sys", "user", "travel-extract", { temperature: 0 });
+    await completeJson("sys", "user", "travel-pack", { temperature: 0.2 });
+    await completeJson("sys", "user", "quality");
+    expect(seen).toEqual([0, 0.2, 0.1]);
+  });
 });

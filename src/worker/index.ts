@@ -1,8 +1,9 @@
 import { config } from "dotenv";
 import { PrismaClient } from "@prisma/client";
-import { processNextQualityJob } from "@/lib/ai/jobs";
+import { processNextJob } from "@/lib/ai/jobs";
 import { imapPollMs, loadMailboxAccounts } from "@/lib/mail/accounts";
 import { closeMailbox, pollMailbox, safeError } from "@/lib/mail/imap";
+import { rehomeMessagesByThread } from "@/lib/mail/rehome-threads";
 
 config();
 
@@ -18,7 +19,7 @@ function sleep(ms: number): Promise<void> {
 async function processJobsLoop(): Promise<void> {
   while (true) {
     try {
-      const claimed = await processNextQualityJob(prisma);
+      const claimed = await processNextJob(prisma);
       if (!claimed) {
         await sleep(JOB_POLL_MS);
       }
@@ -71,6 +72,10 @@ async function pollMailboxLoop(): Promise<void> {
 }
 
 async function main(): Promise<void> {
+  const moved = await rehomeMessagesByThread(prisma);
+  if (moved > 0) {
+    console.info(`[worker] split ${moved} messages into subject threads`);
+  }
   await Promise.all([processJobsLoop(), pollMailboxLoop()]);
 }
 

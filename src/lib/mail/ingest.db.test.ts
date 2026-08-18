@@ -4,7 +4,8 @@ import { PrismaClient } from "@prisma/client";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { seedUsers } from "../seed-users";
 import { ingestInbound } from "./ingest";
-import { parseEml } from "./parse";
+import { parseEml, parseMailFields } from "./parse";
+import { rehomeMessagesByThread } from "./rehome-threads";
 
 const databaseUrl = process.env.DATABASE_URL;
 const prisma = databaseUrl ? new PrismaClient() : null;
@@ -106,5 +107,89 @@ describe.skipIf(!prisma)("ingest inbound mail", () => {
     });
     expect(result).toEqual({ status: "skipped", reason: "header" });
     expect(await prisma!.client.count({ where: { email: "imap-test-header@example.com" } })).toBe(0);
+  });
+
+  it("opens a new conversation when the same person writes with another subject", async () => {
+    const parsed = await parseEml(readFileSync(path.join(fixtures, "inbound-plain.eml")));
+    const first = await ingestInbound(prisma!, {
+      managerId: annaId,
+      managerEmail,
+      gmailUid: "1010",
+      parsed,
+    });
+    const second = await ingestInbound(prisma!, {
+      managerId: annaId,
+      managerEmail,
+      gmailUid: "1011",
+      parsed: parseMailFields({
+        fromEmail: parsed.fromEmail,
+        fromName: parsed.fromName,
+        toEmail: parsed.toEmail,
+        subject: "Командировка Томск",
+        text: "Нужна командировка в Томск",
+        date: new Date("2026-08-18T01:00:00.000Z"),
+      }),
+    });
+    const reply = await ingestInbound(prisma!, {
+      managerId: annaId,
+      managerEmail,
+      gmailUid: "1012",
+      parsed: parseMailFields({
+        fromEmail: parsed.fromEmail,
+        fromName: parsed.fromName,
+        toEmail: parsed.toEmail,
+        subject: "Re: Тест IMAP",
+        text: "уточнение по первой заявке",
+        date: new Date("2026-08-18T01:05:00.000Z"),
+      }),
+    });
+
+    expect(first.status).toBe("created");
+    expect(second.status).toBe("created");
+    expect(reply.status).toBe("created");
+    if (first.status !== "created" || second.status !== "created" || reply.status !== "created") {
+      return;
+    }
+    expect(second.conversationId).not.toBe(first.conversationId);
+    expect(reply.conversationId).toBe(first.conversationId);
+    expect(second.clientId).toBe(first.clientId);
+    expect(
+      await prisma!.conversation.count({ where: { clientId: first.clientId } }),
+    ).toBe(2);
+  });
+
+  it("splits mixed subjects that landed in one conversation", async () => {
+    const parsed = await parseEml(readFileSync(path.join(fixtures, "inbound-plain.eml")));
+    const first = await ingestInbound(prisma!, {
+      managerId: annaId,
+      managerEmail,
+      gmailUid: "1020",
+      parsed,
+    });
+    expect(first.status).toBe("created");
+    if (first.status !== "created") {
+      return;
+    }
+    await prisma!.message.create({
+      data: {
+        conversationId: first.conversationId,
+        direction: "inbound",
+        fromEmail: parsed.fromEmail,
+        toEmail: managerEmail,
+        subject: "Командировка Томск",
+        bodyText: "Нужна командировка в Томск",
+        sentAt: new Date("2026-08-18T01:10:00.000Z"),
+        gmailUid: "1021",
+      },
+    });
+    expect(await rehomeMessagesByThread(prisma!, first.conversationId)).toBeGreaterThanOrEqual(1);
+    expect(
+      await prisma!.conversation.count({ where: { clientId: first.clientId } }),
+    ).toBe(2);
+    const tomsk = await prisma!.message.findFirst({
+      where: { gmailUid: "1021" },
+      select: { conversationId: true },
+    });
+    expect(tomsk?.conversationId).not.toBe(first.conversationId);
   });
 });
