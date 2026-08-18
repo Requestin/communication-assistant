@@ -11,3 +11,7 @@ export function initialLastUid(
   const maxUid = Math.max(0, uidNext - 1);
   return Math.max(0, maxUid - backfill);
 }
+
+export function newMailUidRange(lastUid: number): string {
+  return `${lastUid + 1}:*`;
+}

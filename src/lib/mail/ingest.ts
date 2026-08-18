@@ -6,6 +6,7 @@ import {
   skipReason,
   type ParsedInbound,
 } from "./parse";
+import { conversationThreadKey } from "./thread-key";
 
 export type IngestInput = {
   managerId: string;
@@ -33,6 +34,7 @@ export async function ingestInbound(
   const toEmail = input.parsed.toEmail ?? managerEmail;
   const displayName = displayNameFrom(input.parsed.fromName, fromEmail);
   const subject = input.parsed.subject;
+  const threadKey = conversationThreadKey(subject);
   const sentAt = input.parsed.sentAt;
 
   try {
@@ -48,18 +50,31 @@ export async function ingestInbound(
       });
 
       const existing = await tx.conversation.findUnique({
-        where: { managerId_clientId: { managerId: input.managerId, clientId: client.id } },
+        where: {
+          managerId_clientId_threadKey: {
+            managerId: input.managerId,
+            clientId: client.id,
+            threadKey,
+          },
+        },
       });
 
       const lastMessageAt =
         existing && existing.lastMessageAt > sentAt ? existing.lastMessageAt : sentAt;
 
       const conversation = await tx.conversation.upsert({
-        where: { managerId_clientId: { managerId: input.managerId, clientId: client.id } },
+        where: {
+          managerId_clientId_threadKey: {
+            managerId: input.managerId,
+            clientId: client.id,
+            threadKey,
+          },
+        },
         create: {
           managerId: input.managerId,
           clientId: client.id,
           subject,
+          threadKey,
           lastMessageAt: sentAt,
         },
         update: { subject, lastMessageAt },

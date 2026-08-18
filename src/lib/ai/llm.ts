@@ -15,6 +15,7 @@ export type LlmRawCompleteInput = {
   system: string;
   user: string;
   attempt: 1 | 2;
+  temperature: number;
 };
 
 export type LlmRawCompleteFn = (input: LlmRawCompleteInput) => Promise<string>;
@@ -99,11 +100,12 @@ async function createCompletion(
   system: string,
   user: string,
   withJsonFormat: boolean,
+  temperature: number,
 ): Promise<string> {
   const model = process.env.LLM_MODEL_NAME ?? "qwen36";
   const completion = await llmClient().chat.completions.create({
     model,
-    temperature: 0.1,
+    temperature,
     messages: [
       { role: "system", content: system },
       { role: "user", content: user },
@@ -119,7 +121,7 @@ async function completeRaw(input: LlmRawCompleteInput): Promise<string> {
   }
   if (jsonFormatSupported) {
     try {
-      return await createCompletion(input.system, input.user, true);
+      return await createCompletion(input.system, input.user, true, input.temperature);
     } catch (error) {
       if (isUnsupportedResponseFormat(error)) {
         jsonFormatSupported = false;
@@ -128,13 +130,14 @@ async function completeRaw(input: LlmRawCompleteInput): Promise<string> {
       }
     }
   }
-  return createCompletion(input.system, input.user, false);
+  return createCompletion(input.system, input.user, false, input.temperature);
 }
 
 export async function completeJson<T>(
   system: string,
   user: string,
   schemaName: string,
+  options?: { temperature?: number },
 ): Promise<T> {
   if (jsonOverride) {
     return (await jsonOverride(system, user, schemaName)) as T;
@@ -142,12 +145,13 @@ export async function completeJson<T>(
 
   const started = Date.now();
   const promptChars = system.length + user.length;
+  const temperature = options?.temperature ?? 0.1;
   let lastError: unknown = new LlmJsonError("model failed to return JSON");
 
   for (const attempt of [1, 2] as const) {
     const userPrompt = attempt === 2 ? `${user}\n\n${JSON_RETRY_HINT}` : user;
     try {
-      const text = await completeRaw({ system, user: userPrompt, attempt });
+      const text = await completeRaw({ system, user: userPrompt, attempt, temperature });
       const parsed = parseJsonObject(text);
       console.info(
         `[llm] schema=${schemaName} promptChars=${promptChars} ms=${Date.now() - started} ok=true attempt=${attempt} preview=${clipBody(text)}`,

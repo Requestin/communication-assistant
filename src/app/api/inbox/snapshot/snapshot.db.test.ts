@@ -189,6 +189,51 @@ describe.skipIf(!prisma)("GET /api/inbox/snapshot", () => {
       spelling: 3,
       overall: 2.8,
       issues: ["Сленг"],
+      payload: expect.objectContaining({ spelling: 3, hint: "Перепишите нейтрально." }),
     });
+    expect(threadBody.jobs).toEqual([]);
+  });
+
+  it("returns pending suggest_travel jobs for the open thread", async () => {
+    const inbound = await ingestInbound(prisma!, {
+      managerId: annaId,
+      managerEmail: "communicationassistant36@gmail.com",
+      gmailUid: "2201",
+      parsed: parseMailFields({
+        fromEmail: "imap-test-suggest@example.com",
+        fromName: "Клиент подбора",
+        subject: "Петербург",
+        text: "Нужна командировка в Петербург",
+      }),
+    });
+    if (inbound.status !== "created") {
+      throw new Error("failed to seed thread");
+    }
+    const job = await prisma!.job.create({
+      data: {
+        type: "suggest_travel",
+        status: "pending",
+        conversationId: inbound.conversationId,
+        payload: {},
+      },
+    });
+
+    const cookie = cookieHeader(await loginAs(annaId));
+    const list = await snapshot(
+      new Request("http://127.0.0.1:3010/api/inbox/snapshot", { headers: { cookie } }),
+    );
+    const listBody = (await list.json()) as InboxSnapshotDto;
+    expect(listBody.jobs).toEqual([]);
+
+    const thread = await snapshot(
+      new Request(
+        `http://127.0.0.1:3010/api/inbox/snapshot?conversationId=${inbound.conversationId}`,
+        { headers: { cookie } },
+      ),
+    );
+    const threadBody = (await thread.json()) as InboxSnapshotDto;
+    expect(threadBody.jobs).toEqual([
+      { id: job.id, type: "suggest_travel", status: "pending" },
+    ]);
   });
 });
