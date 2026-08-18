@@ -28,6 +28,50 @@ export type HotelCandidate = {
   nightPrices: number[];
 };
 
+export type RoomNightOffer = {
+  roomsLeft: number;
+  pricePerNightRub: number;
+};
+
+export type HotelNightInventory = Map<
+  string,
+  { standard?: RoomNightOffer; twin?: RoomNightOffer }
+>;
+
+export function pickBestHotelStay(
+  nights: string[],
+  byNight: HotelNightInventory,
+  people: number,
+  hotel: { id: string; name: string; stars: number },
+): HotelCandidate | null {
+  if (nights.length === 0) {
+    return null;
+  }
+
+  const guests = Math.max(1, people);
+  const options: HotelCandidate[] = [];
+  for (const roomType of ["standard", "twin"] as const) {
+    const rooms = roomsForStay(guests, roomType);
+    const rows = nights.map((night) => byNight.get(night)?.[roomType]);
+    if (!rows.every((row) => row && row.roomsLeft >= rooms)) {
+      continue;
+    }
+    const nightPrices = rows.map((row) => row!.pricePerNightRub);
+    options.push({
+      id: hotel.id,
+      name: hotel.name,
+      stars: hotel.stars,
+      roomType,
+      rooms,
+      nights: nights.length,
+      stayCostRub: hotelStayCost(nightPrices, rooms),
+      nightPrices,
+    });
+  }
+
+  return options.sort((a, b) => a.stayCostRub - b.stayCostRub)[0] ?? null;
+}
+
 export type TravelSearchQuery = {
   originCityId: string;
   destCityId: string;
@@ -190,7 +234,7 @@ async function searchHotels(
 
   const candidates: HotelCandidate[] = [];
   for (const hotel of hotels) {
-    const byNight = new Map<string, { standard?: { roomsLeft: number; pricePerNightRub: number }; twin?: { roomsLeft: number; pricePerNightRub: number } }>();
+    const byNight: HotelNightInventory = new Map();
     for (const row of hotel.availability) {
       const key = isoDateOf(row.date);
       const slot = byNight.get(key) ?? {};
@@ -198,42 +242,7 @@ async function searchHotels(
       byNight.set(key, slot);
     }
 
-    const options: HotelCandidate[] = [];
-    const standardRooms = roomsForStay(people, "standard");
-    const standardPrices = nights.map((night) => byNight.get(night)?.standard);
-    if (standardPrices.every((row) => row && row.roomsLeft >= standardRooms)) {
-      const nightPrices = standardPrices.map((row) => row!.pricePerNightRub);
-      options.push({
-        id: hotel.id,
-        name: hotel.name,
-        stars: hotel.stars,
-        roomType: "standard",
-        rooms: standardRooms,
-        nights: nights.length,
-        stayCostRub: hotelStayCost(nightPrices, standardRooms),
-        nightPrices,
-      });
-    }
-
-    if (people >= 2) {
-      const twinRooms = roomsForStay(people, "twin");
-      const twinPrices = nights.map((night) => byNight.get(night)?.twin);
-      if (twinPrices.every((row) => row && row.roomsLeft >= twinRooms)) {
-        const nightPrices = twinPrices.map((row) => row!.pricePerNightRub);
-        options.push({
-          id: hotel.id,
-          name: hotel.name,
-          stars: hotel.stars,
-          roomType: "twin",
-          rooms: twinRooms,
-          nights: nights.length,
-          stayCostRub: hotelStayCost(nightPrices, twinRooms),
-          nightPrices,
-        });
-      }
-    }
-
-    const best = options.sort((a, b) => a.stayCostRub - b.stayCostRub)[0];
+    const best = pickBestHotelStay(nights, byNight, people, hotel);
     if (best) {
       candidates.push(best);
     }

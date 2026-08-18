@@ -29,4 +29,20 @@ describe.skipIf(!prisma)("searchTravel invariant §12.6", () => {
     expect(result.hotels[0]?.nights).toBe(4);
     expect(result.hotelWarning).toBeNull();
   });
+
+  it("finds LED hotels for 1 person on 1–5 Sep 2026", async () => {
+    const result = await searchTravel(prisma!, {
+      originCityId: "MOW",
+      destCityId: "LED",
+      dateFrom: "2026-09-01",
+      dateTo: "2026-09-05",
+      people: 1,
+      needReturn: true,
+      needHotel: true,
+    });
+
+    expect(result.hotels.length).toBeGreaterThanOrEqual(1);
+    expect(result.hotelWarning).toBeNull();
+    expect(result.hotels.every((hotel) => hotel.rooms === 1)).toBe(true);
+  });
 });

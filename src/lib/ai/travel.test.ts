@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { formatOfferInsertText, parseTravelExtract, TRAVEL_DISCLAIMER } from "./travel";
+import {
+  formatMissingAdvice,
+  formatOfferInsertText,
+  parseTravelExtract,
+  requiredGaps,
+  TRAVEL_DISCLAIMER,
+} from "./travel";
 
 describe("parseTravelExtract", () => {
   it("defaults people to 1 and keeps ISO dates", () => {
@@ -15,6 +21,7 @@ describe("parseTravelExtract", () => {
     expect(parsed.dateTo).toBe("2026-09-05");
     expect(parsed.needReturn).toBe(true);
     expect(parsed.needHotel).toBe(true);
+    expect(parsed.missing).toEqual([]);
   });
 
   it("normalizes dotted dates to 2026 ISO", () => {
@@ -29,6 +36,50 @@ describe("parseTravelExtract", () => {
     expect(parsed.dateFrom).toBe("2026-09-01");
     expect(parsed.dateTo).toBe("2026-09-05");
     expect(parsed.people).toBe(2);
+  });
+
+  it("keeps missing slot names and ignores unknown ones", () => {
+    const parsed = parseTravelExtract({
+      origin: "Москва",
+      destination: "Питер",
+      missing: ["dateFrom", "dateTo", "people", "nope"],
+      confidence: 0.9,
+    });
+    expect(parsed.missing).toEqual(["dateFrom", "dateTo"]);
+  });
+});
+
+describe("requiredGaps", () => {
+  it("treats empty dates as gaps even if the model omitted missing", () => {
+    expect(
+      requiredGaps({
+        origin: "Москва",
+        destination: "Питер",
+        dateFrom: null,
+        dateTo: null,
+        missing: [],
+      }),
+    ).toEqual(["dateFrom", "dateTo"]);
+  });
+
+  it("drops a slot from missing when the field is actually filled", () => {
+    expect(
+      requiredGaps({
+        origin: "Москва",
+        destination: "Питер",
+        dateFrom: "2026-11-12",
+        dateTo: "2026-11-17",
+        missing: ["dateFrom"],
+      }),
+    ).toEqual([]);
+  });
+});
+
+describe("formatMissingAdvice", () => {
+  it("asks the manager to clarify dates", () => {
+    const text = formatMissingAdvice(["dateFrom", "dateTo"]);
+    expect(text).toMatch(/уточните даты/i);
+    expect(text).not.toMatch(/вылета/);
   });
 });
 

@@ -1,6 +1,13 @@
+import type { Message } from "@prisma/client";
 import { describe, expect, it } from "vitest";
 import { parseJsonObject } from "./llm";
-import { computeOverall, computeShowHint, parseQualityJson, QualityParseError } from "./quality";
+import {
+  buildQualityUserPrompt,
+  computeOverall,
+  computeShowHint,
+  parseQualityJson,
+  QualityParseError,
+} from "./quality";
 
 const valid = {
   literacy: 4,
@@ -124,5 +131,41 @@ describe("quality helpers", () => {
         issues: ["Сейчас звучит разговорно"],
       }),
     ).toBe(false);
+  });
+});
+
+function fakeOutbound(bodyText: string, subject: string): Message {
+  return {
+    id: "out-1",
+    conversationId: "c1",
+    direction: "outbound",
+    fromEmail: "anna@example.com",
+    toEmail: "client@example.com",
+    subject,
+    bodyText,
+    sentAt: new Date("2026-08-18T12:00:00.000Z"),
+    gmailUid: null,
+    gmailMessageId: null,
+    smtpMessageId: null,
+    createdAt: new Date("2026-08-18T12:00:00.000Z"),
+  };
+}
+
+describe("buildQualityUserPrompt", () => {
+  it("does not put the thread subject into the scored text", () => {
+    const outbound = fakeOutbound(
+      "Извините, на выбранные даты нет номеров. Предлагаем рассмотреть другие даты.",
+      "Re: Командировка в Питер",
+    );
+    const prompt = buildQualityUserPrompt(outbound, []);
+    expect(prompt).not.toContain("Питер");
+    expect(prompt).not.toContain("Тема:");
+    expect(prompt).toContain("на выбранные даты нет номеров");
+  });
+
+  it("keeps Питер when the manager wrote it in the body", () => {
+    const outbound = fakeOutbound("В Питере на эти даты номеров нет.", "Re: Командировка");
+    const prompt = buildQualityUserPrompt(outbound, []);
+    expect(prompt).toContain("Питер");
   });
 });

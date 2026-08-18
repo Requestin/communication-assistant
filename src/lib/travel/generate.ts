@@ -85,6 +85,9 @@ const HOTEL_TEMPLATES = [
   (city: string) => `Аврора Plaza ${city}`,
   (city: string) => `Сибирский двор, ${city}`,
   (city: string) => `Тихий центр, ${city}`,
+  (city: string) => `Северная линия, ${city}`,
+  (city: string) => `Каменный берег, ${city}`,
+  (city: string) => `Дом у вокзала, ${city}`,
 ];
 
 type Band = "short" | "medium" | "long" | "veryLong" | "kgdWest";
@@ -245,7 +248,7 @@ function generateHotelsAndAvailability(rng: () => number): {
   const starCycle = [3, 4, 4, 5];
 
   for (const city of CITIES) {
-    const count = hash32(city.id) % 2 === 0 ? 4 : 3;
+    const count = hash32(city.id) % 2 === 0 ? 8 : 7;
     for (let index = 0; index < count; index += 1) {
       const hotelId = `${city.id}-H${index + 1}`;
       const stars = starCycle[index % starCycle.length];

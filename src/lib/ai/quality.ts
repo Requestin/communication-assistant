@@ -112,8 +112,7 @@ export function buildQualityUserPrompt(outbound: Message, thread: Message[]): st
     outbound.bodyText.length > LETTER_CLIP ? `${outbound.bodyText.slice(0, LETTER_CLIP)}…` : outbound.bodyText;
   return [
     "Оцени последнее письмо менеджера.",
-    "",
-    `Тема: ${outbound.subject}`,
+    "Оценивай только текст в кавычках (тело ответа). Тему цепочки, письма клиента и цитаты в контексте не считай ответом менеджера.",
     "",
     "Письмо менеджера:",
     '"""',

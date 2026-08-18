@@ -16,7 +16,10 @@ import { resolveCity } from "@/lib/travel/resolve-city";
 import { searchTravel, type TravelSearchResult } from "@/lib/travel/search";
 
 const THREAD_CLIP = 8000;
+const MISSING_SLOTS = ["origin", "destination", "dateFrom", "dateTo"] as const;
 export { TRAVEL_DISCLAIMER };
+
+export type MissingSlot = (typeof MISSING_SLOTS)[number];
 
 export type TravelExtract = {
   origin: string;
@@ -29,6 +32,7 @@ export type TravelExtract = {
   notes: string;
   confidence: number;
   unresolved: string[];
+  missing: MissingSlot[];
 };
 
 export type TravelOfferPayload = {
@@ -74,6 +78,14 @@ function coerceIsoDate(value: unknown): string | null {
   return isValidIsoDate(iso) ? iso : null;
 }
 
+function parseMissing(value: unknown): MissingSlot[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  const allowed = new Set<string>(MISSING_SLOTS);
+  return value.filter((item): item is MissingSlot => typeof item === "string" && allowed.has(item));
+}
+
 export function parseTravelExtract(input: unknown): TravelExtract {
   const raw = input && typeof input === "object" ? (input as Record<string, unknown>) : {};
   const unresolved = Array.isArray(raw.unresolved)
@@ -94,7 +106,47 @@ export function parseTravelExtract(input: unknown): TravelExtract {
     notes: asString(raw.notes),
     confidence: Math.min(1, Math.max(0, asNumber(raw.confidence, 0))),
     unresolved,
+    missing: parseMissing(raw.missing),
   };
+}
+
+export function requiredGaps(extract: Pick<TravelExtract, "origin" | "destination" | "dateFrom" | "dateTo" | "missing">): MissingSlot[] {
+  const gaps = new Set<MissingSlot>(extract.missing);
+  if (extract.origin) {
+    gaps.delete("origin");
+  } else {
+    gaps.add("origin");
+  }
+  if (extract.destination) {
+    gaps.delete("destination");
+  } else {
+    gaps.add("destination");
+  }
+  if (extract.dateFrom) {
+    gaps.delete("dateFrom");
+  } else {
+    gaps.add("dateFrom");
+  }
+  if (extract.dateTo) {
+    gaps.delete("dateTo");
+  } else {
+    gaps.add("dateTo");
+  }
+  return MISSING_SLOTS.filter((slot) => gaps.has(slot));
+}
+
+export function formatMissingAdvice(gaps: MissingSlot[]): string {
+  const lines = ["Не хватает данных для подбора. Уточните у клиента:"];
+  if (gaps.includes("origin")) {
+    lines.push("• не указан город вылета");
+  }
+  if (gaps.includes("destination")) {
+    lines.push("• не указан город назначения");
+  }
+  if (gaps.includes("dateFrom") || gaps.includes("dateTo")) {
+    lines.push("• уточните даты поездки (начало и конец)");
+  }
+  return lines.join("\n");
 }
 
 export function buildThreadPrompt(messages: Message[]): string {
@@ -188,6 +240,7 @@ export async function processSuggestTravel(
   const originCity = resolveCity(extracted.origin);
   const destCity = resolveCity(extracted.destination);
   const dateFrom = extracted.dateFrom;
+  const dateTo = extracted.dateTo;
   const unresolved = [...extracted.unresolved];
   if (!originCity && extracted.origin) {
     unresolved.push(extracted.origin);
@@ -196,22 +249,35 @@ export async function processSuggestTravel(
     unresolved.push(extracted.destination);
   }
 
-  if (!originCity || !destCity || !dateFrom || extracted.confidence < 0.5) {
+  const unknownOrigin = Boolean(extracted.origin) && !originCity;
+  const unknownDest = Boolean(extracted.destination) && !destCity;
+  if (unknownOrigin || unknownDest) {
     const unknownCity =
       (!destCity ? extracted.destination : "") ||
       (!originCity ? extracted.origin : "") ||
       unresolved[0];
-    const summary =
-      !originCity || !destCity
-        ? unknownCity
-          ? `В учебном справочнике нет города «${unknownCity}». Уточните направление.`
-          : "Не удалось разобрать города. Уточните заявку."
-        : "Не хватает дат или уверенности разбора. Уточните заявку.";
     await writeOffer(prisma, job.conversationId, {
       kind: "travel_offer",
-      summary,
+      summary: unknownCity
+        ? `В учебном справочнике нет города «${unknownCity}». Уточните направление.`
+        : "Не удалось разобрать города. Уточните заявку.",
       packages: [],
       warnings: unresolved.length > 0 ? unresolved.map((item) => `Не найден город: ${item}`) : [],
+      disclaimer: TRAVEL_DISCLAIMER,
+      originCityId: originCity?.id ?? null,
+      destCityId: destCity?.id ?? null,
+      people: extracted.people,
+    });
+    return;
+  }
+
+  const gaps = requiredGaps(extracted);
+  if (gaps.length > 0 || !originCity || !destCity || !dateFrom || !dateTo) {
+    await writeOffer(prisma, job.conversationId, {
+      kind: "travel_offer",
+      summary: formatMissingAdvice(gaps.length > 0 ? gaps : requiredGaps(extracted)),
+      packages: [],
+      warnings: [],
       disclaimer: TRAVEL_DISCLAIMER,
       originCityId: originCity?.id ?? null,
       destCityId: destCity?.id ?? null,
@@ -224,7 +290,7 @@ export async function processSuggestTravel(
     originCityId: originCity.id,
     destCityId: destCity.id,
     dateFrom,
-    dateTo: extracted.dateTo,
+    dateTo,
     people: extracted.people,
     needReturn: extracted.needReturn,
     needHotel: extracted.needHotel,

@@ -183,6 +183,101 @@ describe.skipIf(!prisma)("suggest_travel jobs", () => {
     expect(pack.totalRub).not.toBe(1);
   });
 
+  it("asks to clarify dates and does not pack when dates are missing", async () => {
+    const { conversationId } = await seedThread(
+      "travel-test-gaps@example.com",
+      "Командировку для одного человека, Москва–Питер",
+    );
+    setLlmCompleteForTests(async (_system, _user, schemaName) => {
+      if (schemaName !== "travel-extract") {
+        throw new Error(`unexpected schema ${schemaName}`);
+      }
+      return {
+        origin: "Москва",
+        destination: "Питер",
+        dateFrom: null,
+        dateTo: null,
+        people: 1,
+        needReturn: false,
+        needHotel: false,
+        notes: "",
+        confidence: 0.95,
+        unresolved: [],
+        missing: ["dateFrom", "dateTo"],
+      };
+    });
+
+    await processSuggestTravel(prisma!, { id: "direct-gaps", conversationId });
+    const note = await prisma!.aiNote.findFirst({ where: { conversationId } });
+    expect(note?.body).toMatch(/уточните даты/i);
+    const payload = note?.payload as Record<string, unknown>;
+    expect(payload.packages).toEqual([]);
+  });
+
+  it("searches the latest dates from extract, not older dates in the thread", async () => {
+    const { conversationId } = await seedThread(
+      "travel-test-latest-dates@example.com",
+      "Двое, Москва — Петербург, с 10.11 по 15.11. Нет, давайте с 12.11 по 17.11.",
+    );
+    let packedDates: { dateFrom?: string; dateTo?: string } | null = null;
+    setLlmCompleteForTests(async (_system, user, schemaName) => {
+      if (schemaName === "travel-extract") {
+        return {
+          origin: "Москва",
+          destination: "Петербург",
+          dateFrom: "2026-11-12",
+          dateTo: "2026-11-17",
+          people: 2,
+          needReturn: true,
+          needHotel: true,
+          notes: "",
+          confidence: 0.9,
+          unresolved: [],
+          missing: [],
+        };
+      }
+      if (schemaName !== "travel-pack") {
+        throw new Error(`unexpected schema ${schemaName}`);
+      }
+      const jsonStart = user.indexOf("{");
+      const slim = JSON.parse(user.slice(jsonStart)) as {
+        dateFrom: string;
+        dateTo: string;
+        outbound: Array<{ id: string }>;
+        returns: Array<{ id: string }>;
+        hotels: Array<{ id: string; roomType: string }>;
+      };
+      packedDates = { dateFrom: slim.dateFrom, dateTo: slim.dateTo };
+      return {
+        summary: "Двое, Москва → Санкт-Петербург, 12–17 ноября 2026.",
+        packages: slim.outbound[0]
+          ? [
+              {
+                label: "Оптимальная цена",
+                outboundFlightId: slim.outbound[0]?.id,
+                returnFlightId: slim.returns[0]?.id ?? null,
+                hotelId: slim.hotels[0]?.id ?? null,
+                roomType: slim.hotels[0]?.roomType,
+                totalRub: 1,
+                why: "По уточнённым датам.",
+              },
+            ]
+          : [],
+        warnings: [],
+      };
+    });
+
+    await processSuggestTravel(prisma!, { id: "direct-latest-dates", conversationId });
+    const note = await prisma!.aiNote.findFirst({ where: { conversationId } });
+    const payload = note?.payload as { summary?: string; packages: unknown[] };
+    const blob = `${note?.body ?? ""}\n${payload.summary ?? ""}\n${JSON.stringify(packedDates ?? payload)}`;
+    expect(blob).toMatch(/2026-11-12|12–17 ноября|12\.11/);
+    expect(blob).not.toMatch(/2026-11-10/);
+    if (packedDates) {
+      expect(packedDates).toMatchObject({ dateFrom: "2026-11-12", dateTo: "2026-11-17" });
+    }
+  });
+
   it("claims a suggest_travel job through the shared queue", async () => {
     const { conversationId } = await seedThread(
       "travel-test-claim@example.com",
