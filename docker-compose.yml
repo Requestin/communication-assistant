@@ -43,17 +43,21 @@ services:
     env_file:
       - .env
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
-      LLM_BASE_URL: http://llm:8088/v1
-    command: ["npx", "tsx", "src/worker/index.ts"]
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@127.0.0.1:5433/${POSTGRES_DB}
+      LLM_BASE_URL: http://127.0.0.1:8088/v1
+    entrypoint: ["npx", "tsx"]
+    command: ["src/worker/index.ts"]
+    network_mode: host
     depends_on:
       db:
         condition: service_healthy
-    networks:
-      - commassist
 
   llm:
-    image: nvidia/cuda:12.4.1-runtime-ubuntu22.04
+    profiles:
+      - gpu-container
+    build:
+      context: ./deploy/llm
+    image: commassist-llm
     container_name: commassist-llm
     restart: unless-stopped
     gpus: all

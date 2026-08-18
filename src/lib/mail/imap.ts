@@ -80,13 +80,14 @@ export async function pollMailbox(
   const lock = await client.getMailboxLock("INBOX");
   try {
     const existing = await prisma.mailCursor.findUnique({ where: { userId } });
-    const lastUid = initialLastUid(existing?.lastUid, client.mailbox?.uidNext ?? 1);
+    const mailbox = client.mailbox || undefined;
+    const lastUid = initialLastUid(existing?.lastUid, mailbox?.uidNext ?? 1);
     if (!existing) {
       console.info(`[imap:${account.code}] first start, catch-up after uid=${lastUid}`);
     }
 
     let maxSeen = lastUid;
-    const uidNext = client.mailbox?.uidNext ?? lastUid + 1;
+    const uidNext = mailbox?.uidNext ?? lastUid + 1;
     if (uidNext > lastUid + 1) {
       const range = newMailUidRange(lastUid);
       for await (const message of client.fetch(range, { uid: true, source: true }, { uid: true })) {

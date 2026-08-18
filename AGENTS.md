@@ -86,24 +86,20 @@
 npm install
 cp .env.example .env   # локально, не коммитить; задать POSTGRES_PASSWORD и SESSION_SECRET
 
-# Только наша Postgres (127.0.0.1:5433). Не трогает mapvideo на 5432.
+./scripts/up.sh          # llama-server в tmux (commassist-llm) + Docker db/web/worker
+./scripts/down.sh        # выключить пилот; том Postgres остаётся
+./scripts/up.sh --build  # пересобрать образы сайта и воркера
+tmux attach -t commassist-llm   # логи модели; отцепиться: Ctrl-b d
+# чужие tmux-сессии (wan22 и т.п.) не трогать
+
+# Разработка на хосте, без контейнера сайта (не вместе с commassist-web):
 docker compose up -d db
-
-npm run db:migrate     # prisma migrate deploy
-npm run db:seed        # четыре пользователя
+npm run db:migrate
+npm run db:seed
 npm run lint
-npm test               # vitest: юнит сида + проверка users в БД
-npm run dev            # http://127.0.0.1:3010
-npm run worker         # IMAP + очередь jobs на хосте, БД 127.0.0.1:5433
-npm run build
-docker compose up --build -d web   # сайт, 127.0.0.1:3010
-docker compose up --build -d worker   # только наш воркер, без портов
-
-# Модель на 127.0.0.1:8088 (первый старт долгий, ~22 ГБ в GPU). Не трогает mapvideo.
-docker compose up -d llm
-# С хоста воркеру нужен LLM_BASE_URL=http://127.0.0.1:8088/v1
-# Если GPU-контейнер не встаёт (Blackwell): llama-server на хосте, bind 127.0.0.1:8088.
-# Не поднимать commassist-worker и npm run worker одновременно.
+npm test
+npm run dev
+npm run worker
 ```
 
 ## Тест-гейт
