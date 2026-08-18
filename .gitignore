@@ -28,7 +28,8 @@ next-env.d.ts
 *.dump
 *.sql.gz
 
-# Логи и ОС
+# Логи скриптов up/down
+/logs/
 .DS_Store
 Thumbs.db
 *.log

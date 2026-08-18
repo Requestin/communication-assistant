@@ -16,26 +16,21 @@
 
 ## Запуск
 
+Из каталога репозитория. Nginx и mapvideo не трогать.
+
 ```bash
-cp .env.example .env
-# SESSION_SECRET, POSTGRES_PASSWORD, три GMAIL_*_APP_PASSWORD — только локально, не в git
+./scripts/up.sh          # модель в tmux + Docker: db, сайт, воркер
+./scripts/down.sh        # выключить это же; письма в томе БД остаются
 
-docker compose up -d db
-npx prisma migrate deploy
-npm run db:seed
-npm run db:seed-travel   # один раз; справочник уже может быть налит
+# после смены кода сайта/воркера:
+./scripts/up.sh --build
 
-# Модель. Контейнер llm на этом сервере может не встать (Blackwell) —
-# тогда llama-server на хосте, bind 127.0.0.1:8088.
-# В .env для хостового воркера: LLM_BASE_URL=http://127.0.0.1:8088/v1
-docker compose up -d llm
-# или llama-server на хосте, если GPU-контейнер не поднялся
-
-npm run worker           # IMAP + очередь jobs. Не вместе с commassist-worker
-npm run dev              # http://127.0.0.1:3010 , только localhost
+tmux attach -t commassist-llm   # логи модели; отцепиться: Ctrl-b, затем d
 ```
 
-Не коммитьте `.env`. Не поднимайте Ollama/ComfyUI рядом без нужды. Не `docker compose down` всего сервера — mapvideo главнее.
+Или `npm run up` / `npm run down` / `npm run llm:attach`.
+
+Не коммитьте `.env`. Не `docker compose down` вне этого каталога и не `docker stop` контейнеров mapvideo.
 
 ## Сценарий показа (5–7 минут)
 

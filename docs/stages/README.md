@@ -25,6 +25,7 @@
 | 9.4. Масштаб динамики оценки | `stage/09-4-admin-score-trend` | [09-4-admin-score-trend.md](09-4-admin-score-trend.md) | За сегодня видно несколько точек в масштабе «Ответы» |
 | 9.5. Прокрутка в тон темы | `stage/09-5-scrollbars` | [09-5-scrollbars.md](09-5-scrollbars.md) | Нет белого ползунка со стрелками ни на одном экране |
 | 9.6. Правки UI после прокрутки | `stage/09-6-ui-more-fixes` | [09-6-ui-more-fixes.md](09-6-ui-more-fixes.md) | Консоль/Почта, Onest, фильтр не закрывает ленту, https://assistant.gyhyry.com |
+| 9.7. Стенд Docker + llama в tmux | `stage/09-7-docker-stand` | [09-7-docker-stand.md](09-7-docker-stand.md) | `up.sh` поднимает db/web/worker и модель в tmux; `down.sh` гасит это же |
 
 ## Как агент ведёт этап
 

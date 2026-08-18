@@ -285,20 +285,16 @@ sequenceDiagram
 
 **`llm`**
 
-- Образ на базе CUDA (например `nvidia/cuda:12.4.1-runtime-ubuntu22.04`) либо запуск бинарника с хоста.
-- Предпочтительный путь пилота: смонтировать уже собранный `/root/local_llm/llama.cpp/build/bin/llama-server` и `.so` рядом, плюс файл GGUF.
-- Флаги ориентир: `--host 0.0.0.0 --port 8088 --ctx-size 8192 -ngl 99 --alias qwen36`.
-- Нужен NVIDIA Container Toolkit (`deploy.resources.reservations.devices` с `gpu`).
-- Модель монтировать **read-only**, не копировать 22 ГБ в образ.
+- По умолчанию **не** в Docker: `llama-server` на хосте в tmux-сессии `commassist-llm`, bind **127.0.0.1:8088**, вес GGUF с диска. Скрипты `scripts/up.sh` / `scripts/down.sh`. Закрытие терминала или Cursor сессию не убивает (`tmux attach -t commassist-llm`).
+- Флаги: `--host 127.0.0.1 --port 8088 --ctx-size 8192 -ngl 99 --alias qwen36 --reasoning off`.
+- Воркер в контейнере с `network_mode: host`, чтобы ходить на этот адрес (из bridge `127.0.0.1` — сам контейнер).
+- Сервис compose `llm` спрятан в profile `gpu-container` и сам не стартует. Не копировать 22 ГБ GGUF в образ.
 - Путь к файлу по умолчанию: `/var/lib/ollama/qwen-source/Qwen3.6-35B-A3B-UD-Q4_K_XL.gguf`.
-- Запасной путь: `/root/.cache/huggingface/hub/models--unsloth--Qwen3.6-35B-A3B-MTP-GGUF/snapshots/5bc3e238d916f48a861bac2f8a1990a0e9b7e98d/Qwen3.6-35B-A3B-UD-Q4_K_XL.gguf`.
-
-Если GPU-контейнер упрётся в драйвер/Blackwell — допустимый запасной план: `llm` как процесс на хосте, а `web`/`worker` ходят на `host.docker.internal:8088` / `172.17.0.1:8088`. Это отклонение фиксируем в README при запуске, архитектуру не меняем.
 
 **`web`**
 
 - Multi-stage: `node:22-alpine`, `next build`, `next start -p 3010`.
-- Ждёт healthy `db` и доступный `llm` (повтор при старте, не падать навсегда если модель ещё грузится).
+- Ждёт healthy `db`. Модель на хосте: если ещё грузится, запросы к ИИ повторять, не падать навсегда.
 - При старте: `prisma migrate deploy` и сид, если справочник пуст.
 
 **`worker`**
@@ -1102,7 +1098,7 @@ DATABASE_URL=postgresql://commassist:replace-me@db:5432/commassist
 # DATABASE_URL=postgresql://commassist:replace-me@127.0.0.1:5433/commassist
 
 # Локальная модель (llama-server)
-LLM_BASE_URL=http://llm:8088/v1
+LLM_BASE_URL=http://127.0.0.1:8088/v1
 LLM_API_KEY=local
 LLM_MODEL_NAME=qwen36
 LLM_GGUF_PATH=/var/lib/ollama/qwen-source/Qwen3.6-35B-A3B-UD-Q4_K_XL.gguf
@@ -1314,6 +1310,15 @@ User.code M65 → …
 
 **Готово когда:** человек подтвердил шапку, фильтр ленты и вход по домену.
 
+### Этап 9.7. Стенд: Docker без llm, llama в tmux
+
+Файл этапа: [docs/stages/09-7-docker-stand.md](docs/stages/09-7-docker-stand.md)
+
+- `db` / `web` / `worker` в Docker. Модель на хосте в tmux `commassist-llm`.
+- Включение и выключение: `./scripts/up.sh` / `./scripts/down.sh`. Контейнер `llm` по умолчанию не стартует.
+
+**Готово когда:** `up.sh` поднимает сайт на 3010 и воркер, модель отвечает на 8088, mapvideo на месте.
+
 Оценка трудоёмкости пилота: примерно несколько плотных рабочих дней одного разработчика, если модель уже поднимается.
 
 ---
@@ -1326,12 +1331,8 @@ User.code M65 → …
 cp .env.example .env
 # заполнить SESSION_SECRET, POSTGRES_PASSWORD, три GMAIL_*_APP_PASSWORD
 
-docker compose up --build -d
-# дождаться, пока llm загрузит 22 ГБ в GPU (первый старт дольше)
-
-# если сид не вызван из web:
-docker compose exec web npx prisma db seed
-docker compose exec web npx tsx scripts/seed-travel.ts
+./scripts/up.sh
+# первый старт модели долгий (~22 ГБ в GPU)
 ```
 
 Открыть `http://127.0.0.1:3010` или **https://assistant.gyhyry.com**.

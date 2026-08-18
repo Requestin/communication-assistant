@@ -11,7 +11,10 @@
     "db:migrate": "prisma migrate deploy",
     "db:seed": "tsx prisma/seed.ts",
     "db:seed-travel": "tsx scripts/seed-travel.ts",
-    "worker": "tsx src/worker/index.ts"
+    "worker": "tsx src/worker/index.ts",
+    "up": "bash scripts/up.sh",
+    "down": "bash scripts/down.sh",
+    "llm:attach": "tmux attach -t commassist-llm"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
