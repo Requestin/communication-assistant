@@ -31,7 +31,7 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
   }
 
   return (
-    <div className="flex min-h-screen flex-col">
+    <div className="flex h-dvh flex-col overflow-hidden">
       <AppHeader name={session.name} role={session.role} />
       <InboxView
         role={session.role}
