@@ -131,15 +131,23 @@ export async function parseEml(source: Source): Promise<ParsedInbound> {
   return parseParsedMail(await simpleParser(source));
 }
 
+export function isSystemSender(email: string): boolean {
+  const domain = normalizeEmail(email).split("@")[1];
+  return domain === "accounts.google.com" || Boolean(domain?.endsWith(".accounts.google.com"));
+}
+
 export function skipReason(
   parsed: ParsedInbound,
   managerEmail: string,
-): "self" | "header" | null {
+): "self" | "header" | "system" | null {
   if (parsed.hasCommAssistHeader) {
     return "header";
   }
   if (parsed.fromEmail === normalizeEmail(managerEmail)) {
     return "self";
+  }
+  if (isSystemSender(parsed.fromEmail)) {
+    return "system";
   }
   return null;
 }

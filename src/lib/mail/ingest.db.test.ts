@@ -109,6 +109,25 @@ describe.skipIf(!prisma)("ingest inbound mail", () => {
     expect(await prisma!.client.count({ where: { email: "imap-test-header@example.com" } })).toBe(0);
   });
 
+  it("skips Google account notifications without creating a client", async () => {
+    const parsed = parseMailFields({
+      fromEmail: "no-reply@accounts.google.com",
+      fromName: "Google",
+      subject: "Оповещение системы безопасности",
+      text: "Новый вход в аккаунт",
+    });
+    const result = await ingestInbound(prisma!, {
+      managerId: annaId,
+      managerEmail,
+      gmailUid: "google-system-1",
+      parsed,
+    });
+    expect(result).toEqual({ status: "skipped", reason: "system" });
+    expect(await prisma!.client.count({
+      where: { email: "no-reply@accounts.google.com", managerId: annaId },
+    })).toBe(0);
+  });
+
   it("opens a new conversation when the same person writes with another subject", async () => {
     const parsed = await parseEml(readFileSync(path.join(fixtures, "inbound-plain.eml")));
     const first = await ingestInbound(prisma!, {

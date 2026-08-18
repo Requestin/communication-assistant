@@ -18,7 +18,7 @@ export type IngestInput = {
 export type IngestResult =
   | { status: "created"; messageId: string; conversationId: string; clientId: string }
   | { status: "duplicate" }
-  | { status: "skipped"; reason: "self" | "header" };
+  | { status: "skipped"; reason: "self" | "header" | "system" };
 
 export async function ingestInbound(
   prisma: PrismaClient,
