@@ -46,9 +46,21 @@ export function computeOverall(
   return Math.round(((literacy + spelling + punctuation + businessStyle) / 4) * 10) / 10;
 }
 
+export function allCriteriaAtLeastFour(
+  literacy: number,
+  spelling: number,
+  punctuation: number,
+  businessStyle: number,
+): boolean {
+  return literacy >= 4 && spelling >= 4 && punctuation >= 4 && businessStyle >= 4;
+}
+
 export function computeShowHint(
   scores: Pick<QualityJson, "literacy" | "spelling" | "punctuation" | "businessStyle" | "overall" | "issues">,
 ): boolean {
+  if (allCriteriaAtLeastFour(scores.literacy, scores.spelling, scores.punctuation, scores.businessStyle)) {
+    return false;
+  }
   return (
     scores.literacy <= 3 ||
     scores.spelling <= 3 ||
@@ -68,11 +80,14 @@ export function parseQualityJson(input: unknown): QualityJson {
   const spelling = asIntScore(raw.spelling, "spelling");
   const punctuation = asIntScore(raw.punctuation, "punctuation");
   const businessStyle = asIntScore(raw.businessStyle, "businessStyle");
-  const issues = Array.isArray(raw.issues)
+  const issuesRaw = Array.isArray(raw.issues)
     ? raw.issues.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
     : [];
-  const hint = typeof raw.hint === "string" ? raw.hint.trim() : "";
+  const hintRaw = typeof raw.hint === "string" ? raw.hint.trim() : "";
   const overall = computeOverall(literacy, spelling, punctuation, businessStyle);
+  const silent = allCriteriaAtLeastFour(literacy, spelling, punctuation, businessStyle);
+  const issues = silent ? [] : issuesRaw;
+  const hint = silent ? "" : hintRaw;
   const showHint = computeShowHint({
     literacy,
     spelling,

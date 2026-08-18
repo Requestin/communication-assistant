@@ -43,7 +43,7 @@ describe("parseQualityJson", () => {
     expect(score.showHint).toBe(false);
   });
 
-  it("shows a hint when issues exist even if scores are high", () => {
+  it("stays silent when scores are 5–5–5–5 even if the model attached issues", () => {
     const score = parseQualityJson({
       literacy: 5,
       spelling: 5,
@@ -51,9 +51,29 @@ describe("parseQualityJson", () => {
       businessStyle: 5,
       issues: ["Повторите даты поездки"],
       hint: "Добавьте даты",
-      showHint: false,
+      showHint: true,
     });
-    expect(score.showHint).toBe(true);
+    expect(score.overall).toBe(5);
+    expect(score.issues).toEqual([]);
+    expect(score.hint).toBe("");
+    expect(score.showHint).toBe(false);
+  });
+
+  it("drops stylistic nits when all four scores are at least 4", () => {
+    const score = parseQualityJson({
+      literacy: 5,
+      spelling: 5,
+      punctuation: 5,
+      businessStyle: 4,
+      overall: 1,
+      issues: ["Сейчас звучит разговорно"],
+      hint: "Сформулируйте строже",
+      showHint: true,
+    });
+    expect(score.overall).toBe(4.8);
+    expect(score.issues).toEqual([]);
+    expect(score.hint).toBe("");
+    expect(score.showHint).toBe(false);
   });
 
   it("rejects scores outside 1–5", () => {
@@ -94,5 +114,15 @@ describe("quality helpers", () => {
         issues: [],
       }),
     ).toBe(true);
+    expect(
+      computeShowHint({
+        literacy: 5,
+        spelling: 5,
+        punctuation: 5,
+        businessStyle: 5,
+        overall: 5,
+        issues: ["Сейчас звучит разговорно"],
+      }),
+    ).toBe(false);
   });
 });
