@@ -28,7 +28,17 @@ describe("demo bind and secrets", () => {
     try {
       trackedPasswords = execFileSync(
         "git",
-        ["grep", "-n", "GMAIL_.*APP_PASSWORD=.", "--", ":!.env.example", ":!docs", ":!ARCHITECTURE.md", ":!README.md"],
+        [
+          "grep",
+          "-n",
+          "GMAIL_.*APP_PASSWORD=.",
+          "--",
+          ":!.env.example",
+          ":!docs",
+          ":!ARCHITECTURE.md",
+          ":!README.md",
+          ":!src/lib/demo-bind.test.ts",
+        ],
         { encoding: "utf8" },
       );
     } catch {

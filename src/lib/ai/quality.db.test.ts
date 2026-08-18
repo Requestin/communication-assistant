@@ -110,6 +110,33 @@ describe.skipIf(!prisma)("evaluate_quality jobs", () => {
     expect(job?.status).toBe("done");
   });
 
+  it("does not create an AiNote when high scores come with stylistic nits", async () => {
+    const { outbound, conversationId } = await seedOutbound(
+      "quality-test-nits@example.com",
+      "Добрый день! Сейчас подберём для вас наилучшее решение и сразу же вернёмся с ответом!",
+    );
+    setLlmCompleteForTests(async () => ({
+      literacy: 5,
+      spelling: 5,
+      punctuation: 5,
+      businessStyle: 5,
+      overall: 5,
+      issues: ["Сейчас звучит разговорно"],
+      hint: "Сформулируйте строже",
+      showHint: true,
+    }));
+
+    expect(await processNextQualityJob(prisma!)).toBe(true);
+    const score = await prisma!.qualityScore.findUnique({ where: { messageId: outbound.id } });
+    expect(score).toMatchObject({
+      showHint: false,
+    });
+    expect(score?.issues).toEqual([]);
+    expect(await prisma!.aiNote.count({ where: { conversationId } })).toBe(0);
+    const job = await prisma!.job.findFirst({ where: { conversationId } });
+    expect(job?.status).toBe("done");
+  });
+
   it("creates a quality_hint note when the reply is careless", async () => {
     const { outbound, conversationId } = await seedOutbound(
       "quality-test-hint@example.com",
