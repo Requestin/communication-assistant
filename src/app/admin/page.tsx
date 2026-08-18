@@ -1,4 +1,3 @@
-import dynamic from "next/dynamic";
 import { redirect } from "next/navigation";
 import { AppHeader } from "@/components/app-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -6,17 +5,8 @@ import { formatHintRate, formatScore } from "@/lib/admin/format";
 import { buildAdminStats } from "@/lib/admin/stats";
 import { getSessionFromCookies } from "@/lib/auth-server";
 import { prisma } from "@/lib/db";
+import { AdminCharts } from "./admin-charts";
 import { AdminManagers } from "./admin-managers";
-
-const AdminCharts = dynamic(
-  () => import("./admin-charts").then((mod) => mod.AdminCharts),
-  {
-    ssr: false,
-    loading: () => (
-      <p className="text-sm text-muted-foreground">Графики появятся после загрузки.</p>
-    ),
-  },
-);
 
 export default async function AdminPage() {
   const session = await getSessionFromCookies();
