@@ -1,17 +1,19 @@
-# AGENTS.md
+# [AGENTS.md](http://AGENTS.md)
 
 Инструкции для AI-агента в этом репозитории. Люди начинают с [README.md](README.md) и [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## Обзор
 
-Пилот «Помощник в коммуникации с клиентами»: Next.js, Postgres, воркер почты, локальная Qwen через llama-server. Репозиторий: https://github.com/Requestin/communication-assistant
+Пилот «Помощник в коммуникации с клиентами»: Next.js, Postgres, воркер почты, локальная Qwen через llama-server. Репозиторий: [https://github.com/Requestin/communication-assistant](https://github.com/Requestin/communication-assistant)
 
-| Документ | Роль |
-| --- | --- |
-| [ARCHITECTURE.md](ARCHITECTURE.md) | Источник правды по **продукту** |
-| [DESIGN.md](DESIGN.md) | Источник правды по **визуалу** |
+
+| Документ                              | Роль                                  |
+| ------------------------------------- | ------------------------------------- |
+| [ARCHITECTURE.md](ARCHITECTURE.md)    | Источник правды по **продукту**       |
+| [DESIGN.md](DESIGN.md)                | Источник правды по **визуалу**        |
 | [docs/stages/](docs/stages/README.md) | Источник правды по **текущему этапу** |
-| Этот файл + `.cursor/rules/` | Источник правды по **процессу** |
+| Этот файл + `.cursor/rules/`          | Источник правды по **процессу**       |
+
 
 Не копировать архитектуру сюда. Ссылаться на разделы.
 
@@ -19,16 +21,20 @@
 
 Лежат в `.cursor/skills/`. Читать до работы, не после.
 
-| Когда | Скиллы |
-| --- | --- |
-| Любой `*.tsx` | `frontend-design` + `comm-ui` |
-| Красные тесты или баг | `systematic-debugging` |
-| Перед каждым PR | `testing-reviewer` + `code-reviewer` |
-| Смена `/api/*` | `api-contract-checker` |
-| Этапы 3–4 | `mail-privacy` (+ `comm-ui` на ленте) |
-| Этапы 5–6 | `local-llm-json` + `comm-ui` |
-| Этап 7 | UI-скиллы; Recharts без кислотных градиентов |
-| Этап 8 | `frontend-design` + `comm-ui` |
+
+| Когда                 | Скиллы                                       |
+| --------------------- | -------------------------------------------- |
+| Любой `*.tsx`         | `frontend-design` + `comm-ui`                |
+| Красные тесты или баг | `systematic-debugging`                       |
+| Перед каждым PR       | `testing-reviewer` + `code-reviewer`         |
+| Смена `/api/*`        | `api-contract-checker`                       |
+| Этапы 3–4             | `mail-privacy` (+ `comm-ui` на ленте)        |
+| Этапы 5–6             | `local-llm-json` + `comm-ui`                 |
+| Этап 7                | UI-скиллы; Recharts без кислотных градиентов |
+| Этап 8                | `frontend-design` + `comm-ui`                |
+
+
+
 
 ## Mapvideo главнее этого пилота
 
@@ -102,6 +108,8 @@ npm run dev
 npm run worker
 ```
 
+
+
 ## Тест-гейт
 
 - Нет зелёных автопроверок этапа — нет коммита и нет PR.
@@ -109,12 +117,16 @@ npm run worker
 - Живой Gmail и живую модель в unit-тестах не дергать: фикстуры и моки. Интеграцию с GPU — по возможности, не вместо юнитов.
 - Перед PR: lint + test (+ то, что перечислено в этапе).
 
+
+
 ## Секреты
 
 - `.env` не коммитить. В git только `.env.example` с пустыми паролями.
 - Пароли приложений Gmail не писать в md, issues, логи, скриншоты, чат.
 - Не читать `gmail_imap_test.py` в коммиты и не цитировать из него пароли.
 - В логах обрезать тела писем.
+
+
 
 ## Когда звать человека
 
@@ -139,8 +151,11 @@ npm run worker
 - PR `[stage NN]` влит в `main`.
 - В handoff: что слито, какие тесты, что осталось на человеке, какой следующий этап.
 
+
+
 ## Откат
 
 - До merge: `git reset` / удаление своей ветки, данные справочника — `--force` сида или очистка таблиц этапа.
 - После merge: revert-PR в `main` или fix-forward на новой ветке. Не переписывать историю `main`.
 - Не дропать том Postgres с живыми письмами без явной просьбы человека.
+
