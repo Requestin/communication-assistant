@@ -18,6 +18,22 @@ export type QualityJson = {
 const CONTEXT_MESSAGES = 6;
 const CONTEXT_CLIP = 1500;
 const LETTER_CLIP = 8000;
+export const GREETING_IDLE_MS = 8 * 60 * 60 * 1000;
+
+const GREETING_WORD_RE =
+  /(?:^|[^\p{L}])(здравствуйте|добрый день|доброе утро|добрый вечер|привет)(?:[^\p{L}]|$)/iu;
+const GREETING_ISSUE_RE = /приветств|поздорова|здравствуй|добрый день|доброе утро|добрый вечер/i;
+
+export type GreetingFacts = {
+  hasPriorOutbound: boolean;
+  previousSentAt: Date | null;
+  lastInboundText: string | null;
+};
+
+export type GreetingDecision = {
+  expected: boolean;
+  reason: "first-outbound" | "idle" | "client-greeted" | "skip";
+};
 
 export class QualityParseError extends Error {
   constructor(message: string) {
@@ -71,6 +87,69 @@ export function computeShowHint(
   );
 }
 
+export function textHasGreeting(text: string | null | undefined): boolean {
+  if (!text || !text.trim()) {
+    return false;
+  }
+  const normalized = text.trim().toLowerCase().replace(/\s+/g, " ");
+  GREETING_WORD_RE.lastIndex = 0;
+  return GREETING_WORD_RE.test(normalized);
+}
+
+export function greetingExpected(outbound: Pick<Message, "sentAt">, facts: GreetingFacts): GreetingDecision {
+  if (!facts.hasPriorOutbound) {
+    return { expected: true, reason: "first-outbound" };
+  }
+  if (
+    facts.previousSentAt &&
+    outbound.sentAt.getTime() - facts.previousSentAt.getTime() > GREETING_IDLE_MS
+  ) {
+    return { expected: true, reason: "idle" };
+  }
+  if (textHasGreeting(facts.lastInboundText)) {
+    return { expected: true, reason: "client-greeted" };
+  }
+  return { expected: false, reason: "skip" };
+}
+
+function isGreetingComplaint(text: string): boolean {
+  return GREETING_ISSUE_RE.test(text);
+}
+
+export function applyGreetingGate(score: QualityJson, expected: boolean): QualityJson {
+  if (expected) {
+    return score;
+  }
+  const issues = score.issues.filter((item) => !isGreetingComplaint(item));
+  const hint = score.hint
+    .split(/(?<=[.!?])\s+/)
+    .filter((part) => part.trim().length > 0 && !isGreetingComplaint(part))
+    .join(" ")
+    .trim();
+  let businessStyle = score.businessStyle;
+  let overall = score.overall;
+  if (issues.length === 0 && businessStyle <= 3) {
+    businessStyle = 4;
+    overall = computeOverall(score.literacy, score.spelling, score.punctuation, businessStyle);
+  }
+  const showHint = computeShowHint({
+    literacy: score.literacy,
+    spelling: score.spelling,
+    punctuation: score.punctuation,
+    businessStyle,
+    overall,
+    issues,
+  });
+  return { ...score, issues, hint, businessStyle, overall, showHint };
+}
+
+const GREETING_REASON_LABEL: Record<GreetingDecision["reason"], string> = {
+  "first-outbound": "первый исходящий",
+  idle: "простой больше 8 часов",
+  "client-greeted": "клиент поздоровался",
+  skip: "не проверять",
+};
+
 export function parseQualityJson(input: unknown): QualityJson {
   if (!input || typeof input !== "object") {
     throw new QualityParseError("quality JSON must be an object");
@@ -99,7 +178,11 @@ export function parseQualityJson(input: unknown): QualityJson {
   return { literacy, spelling, punctuation, businessStyle, overall, issues, hint, showHint };
 }
 
-export function buildQualityUserPrompt(outbound: Message, thread: Message[]): string {
+export function buildQualityUserPrompt(
+  outbound: Message,
+  thread: Message[],
+  greeting: GreetingDecision = { expected: false, reason: "skip" },
+): string {
   const context = thread
     .slice(-CONTEXT_MESSAGES)
     .map((item) => {
@@ -110,9 +193,13 @@ export function buildQualityUserPrompt(outbound: Message, thread: Message[]): st
     .join("\n");
   const letter =
     outbound.bodyText.length > LETTER_CLIP ? `${outbound.bodyText.slice(0, LETTER_CLIP)}…` : outbound.bodyText;
+  const greetingLine = greeting.expected
+    ? `Проверять приветствие: да (${GREETING_REASON_LABEL[greeting.reason]})`
+    : "Проверять приветствие: нет";
   return [
     "Оцени последнее письмо менеджера.",
     "Оценивай только текст в кавычках (тело ответа). Тему цепочки, письма клиента и цитаты в контексте не считай ответом менеджера.",
+    greetingLine,
     "",
     "Письмо менеджера:",
     '"""',
@@ -159,12 +246,38 @@ export async function processEvaluateQuality(
   });
   const thread = [...recent].reverse();
 
+  const before = {
+    conversationId: message.conversationId,
+    sentAt: { lt: message.sentAt },
+  };
+  const [priorOutbound, previous, lastInbound] = await Promise.all([
+    prisma.message.findFirst({
+      where: { ...before, direction: "outbound" },
+      select: { id: true },
+    }),
+    prisma.message.findFirst({
+      where: before,
+      orderBy: { sentAt: "desc" },
+      select: { sentAt: true },
+    }),
+    prisma.message.findFirst({
+      where: { ...before, direction: "inbound" },
+      orderBy: { sentAt: "desc" },
+      select: { bodyText: true },
+    }),
+  ]);
+  const greeting = greetingExpected(message, {
+    hasPriorOutbound: Boolean(priorOutbound),
+    previousSentAt: previous?.sentAt ?? null,
+    lastInboundText: lastInbound?.bodyText ?? null,
+  });
+
   const raw = await completeJson<unknown>(
     loadQualitySystemPrompt(),
-    buildQualityUserPrompt(message, thread),
+    buildQualityUserPrompt(message, thread, greeting),
     "quality",
   );
-  const score = parseQualityJson(raw);
+  const score = applyGreetingGate(parseQualityJson(raw), greeting.expected);
   console.info(
     `[quality] message=${message.id} overall=${score.overall} showHint=${score.showHint} preview=${clipBody(message.bodyText)}`,
   );
