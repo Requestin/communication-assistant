@@ -2,11 +2,15 @@ import type { Message } from "@prisma/client";
 import { describe, expect, it } from "vitest";
 import { parseJsonObject } from "./llm";
 import {
+  applyGreetingGate,
   buildQualityUserPrompt,
   computeOverall,
   computeShowHint,
+  greetingExpected,
+  GREETING_IDLE_MS,
   parseQualityJson,
   QualityParseError,
+  textHasGreeting,
 } from "./quality";
 
 const valid = {
@@ -167,5 +171,162 @@ describe("buildQualityUserPrompt", () => {
     const outbound = fakeOutbound("В Питере на эти даты номеров нет.", "Re: Командировка");
     const prompt = buildQualityUserPrompt(outbound, []);
     expect(prompt).toContain("Питер");
+  });
+
+  it("states whether greeting should be scored", () => {
+    const outbound = fakeOutbound("Подберём варианты на эти даты.", "Re: Командировка");
+    expect(buildQualityUserPrompt(outbound, [])).toContain("Проверять приветствие: нет");
+    expect(
+      buildQualityUserPrompt(outbound, [], { expected: true, reason: "first-outbound" }),
+    ).toContain("Проверять приветствие: да (первый исходящий)");
+  });
+});
+
+describe("greetingExpected", () => {
+  const outboundAt = new Date("2026-08-18T12:00:00.000Z");
+
+  it("is true for the first outbound in the thread", () => {
+    expect(
+      greetingExpected(
+        { sentAt: outboundAt },
+        { hasPriorOutbound: false, previousSentAt: new Date("2026-08-18T11:50:00.000Z"), lastInboundText: "Нужны даты" },
+      ),
+    ).toEqual({ expected: true, reason: "first-outbound" });
+  });
+
+  it("is false for a follow-up ten minutes later when the client did not greet", () => {
+    expect(
+      greetingExpected(
+        { sentAt: outboundAt },
+        {
+          hasPriorOutbound: true,
+          previousSentAt: new Date("2026-08-18T11:50:00.000Z"),
+          lastInboundText: "Нужны даты на сентябрь",
+        },
+      ),
+    ).toEqual({ expected: false, reason: "skip" });
+  });
+
+  it("is true after an idle gap longer than 8 hours", () => {
+    expect(
+      greetingExpected(
+        { sentAt: outboundAt },
+        {
+          hasPriorOutbound: true,
+          previousSentAt: new Date(outboundAt.getTime() - GREETING_IDLE_MS - 60_000),
+          lastInboundText: "Нужны даты",
+        },
+      ),
+    ).toEqual({ expected: true, reason: "idle" });
+  });
+
+  it("is false when the idle gap is just under 8 hours", () => {
+    expect(
+      greetingExpected(
+        { sentAt: outboundAt },
+        {
+          hasPriorOutbound: true,
+          previousSentAt: new Date(outboundAt.getTime() - GREETING_IDLE_MS + 60_000),
+          lastInboundText: "Нужны даты",
+        },
+      ),
+    ).toEqual({ expected: false, reason: "skip" });
+  });
+
+  it("is false when the idle gap is exactly 8 hours", () => {
+    expect(
+      greetingExpected(
+        { sentAt: outboundAt },
+        {
+          hasPriorOutbound: true,
+          previousSentAt: new Date(outboundAt.getTime() - GREETING_IDLE_MS),
+          lastInboundText: "Нужны даты",
+        },
+      ),
+    ).toEqual({ expected: false, reason: "skip" });
+  });
+
+  it("is true when the latest inbound greeted even in the middle of a thread", () => {
+    expect(
+      greetingExpected(
+        { sentAt: outboundAt },
+        {
+          hasPriorOutbound: true,
+          previousSentAt: new Date("2026-08-18T11:50:00.000Z"),
+          lastInboundText: "Добрый день, подскажите даты",
+        },
+      ),
+    ).toEqual({ expected: true, reason: "client-greeted" });
+    expect(textHasGreeting("Добрый день, подскажите даты")).toBe(true);
+    expect(textHasGreeting("Нужны даты на сентябрь")).toBe(false);
+  });
+});
+
+describe("applyGreetingGate", () => {
+  it("drops greeting nits and lifts style when greeting is not expected", () => {
+    const parsed = parseQualityJson({
+      literacy: 5,
+      spelling: 5,
+      punctuation: 5,
+      businessStyle: 2,
+      issues: ["Нет приветствия в начале письма"],
+      hint: "Поздоровайтесь с клиентом. Повторите даты.",
+      showHint: true,
+    });
+    const gated = applyGreetingGate(parsed, false);
+    expect(gated.issues).toEqual([]);
+    expect(gated.hint).toBe("Повторите даты.");
+    expect(gated.businessStyle).toBe(4);
+    expect(gated.overall).toBe(4.8);
+    expect(gated.showHint).toBe(false);
+  });
+
+  it("keeps slang cards when greeting is not expected", () => {
+    const parsed = parseQualityJson({
+      literacy: 5,
+      spelling: 5,
+      punctuation: 5,
+      businessStyle: 2,
+      issues: ["Сленг: «ок ща» не подходит для делового ответа"],
+      hint: "Уберите сленг.",
+      showHint: true,
+    });
+    const gated = applyGreetingGate(parsed, false);
+    expect(gated.issues).toEqual(["Сленг: «ок ща» не подходит для делового ответа"]);
+    expect(gated.businessStyle).toBe(2);
+    expect(gated.showHint).toBe(true);
+  });
+
+  it("strips greeting nits but does not lift style when slang remains", () => {
+    const parsed = parseQualityJson({
+      literacy: 5,
+      spelling: 5,
+      punctuation: 5,
+      businessStyle: 2,
+      issues: ["Нет приветствия в начале письма", "Сленг: «ок ща» не подходит для делового ответа"],
+      hint: "Поздоровайтесь с клиентом. Уберите сленг.",
+      showHint: true,
+    });
+    const gated = applyGreetingGate(parsed, false);
+    expect(gated.issues).toEqual(["Сленг: «ок ща» не подходит для делового ответа"]);
+    expect(gated.hint).toBe("Уберите сленг.");
+    expect(gated.businessStyle).toBe(2);
+    expect(gated.showHint).toBe(true);
+  });
+
+  it("leaves greeting issues in place when greeting is expected", () => {
+    const parsed = parseQualityJson({
+      literacy: 5,
+      spelling: 5,
+      punctuation: 5,
+      businessStyle: 2,
+      issues: ["Нет приветствия в начале письма"],
+      hint: "Поздоровайтесь с клиентом.",
+      showHint: true,
+    });
+    const gated = applyGreetingGate(parsed, true);
+    expect(gated.issues).toEqual(["Нет приветствия в начале письма"]);
+    expect(gated.businessStyle).toBe(2);
+    expect(gated.showHint).toBe(true);
   });
 });

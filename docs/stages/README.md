@@ -27,6 +27,7 @@
 | 9.6. Правки UI после прокрутки | `stage/09-6-ui-more-fixes` | [09-6-ui-more-fixes.md](09-6-ui-more-fixes.md) | Консоль/Почта, Onest, фильтр не закрывает ленту, https://assistant.gyhyry.com |
 | 9.7. Стенд Docker + llama в tmux | `stage/09-7-docker-stand` | [09-7-docker-stand.md](09-7-docker-stand.md) | `up.sh` поднимает db/web/worker и модель в tmux; `down.sh` гасит это же |
 | 9.8. Убрать оговорки из UI | `stage/09-8-copy-cleanup` | [09-8-copy-cleanup.md](09-8-copy-cleanup.md) | Нет «учебные данные / не оферта» и лишних подписей в почте |
+| 9.9. Приветствие не в каждом письме | `stage/09-9-agent-hello-fix` | [09-9-agent-hello-fix.md](09-9-agent-hello-fix.md) | В активной ленте нет штрафа за отсутствие «здравствуйте» |
 
 ## Как агент ведёт этап
 
