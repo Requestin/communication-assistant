@@ -88,7 +88,7 @@ async function moveUids(client: TrashImapClient, uids: number[], trashPath: stri
   }
 }
 
-export async function searchSentUidsByMessageId(
+async function searchSentUidsByHeader(
   client: TrashImapClient,
   rawId: string,
 ): Promise<number[]> {
@@ -100,7 +100,7 @@ export async function searchSentUidsByMessageId(
       );
       for (const uid of uids) {
         const numeric = Number(uid);
-        if (Number.isFinite(numeric)) {
+        if (Number.isFinite(numeric) && numeric > 0) {
           found.add(numeric);
         }
       }
@@ -111,8 +111,73 @@ export async function searchSentUidsByMessageId(
   return Array.from(found);
 }
 
+export async function findSentUidsByEnvelope(
+  client: TrashImapClient,
+  wantedIds: Set<string>,
+): Promise<number[]> {
+  if (wantedIds.size === 0) {
+    return [];
+  }
+  const found: number[] = [];
+  try {
+    for await (const message of client.fetch("1:*", { envelope: true, uid: true }, { uid: true })) {
+      const raw = message.envelope?.messageId;
+      const uid = Number(message.uid);
+      if (!raw || !Number.isFinite(uid) || uid <= 0) {
+        continue;
+      }
+      if (wantedIds.has(normalizeMessageId(raw))) {
+        found.push(uid);
+      }
+    }
+  } catch {
+    return found;
+  }
+  return found;
+}
+
+export async function searchSentUidsByMessageId(
+  client: TrashImapClient,
+  rawId: string,
+): Promise<number[]> {
+  const fromHeader = await searchSentUidsByHeader(client, rawId);
+  if (fromHeader.length > 0) {
+    return fromHeader;
+  }
+  const wanted = normalizeMessageId(rawId);
+  if (!wanted) {
+    return [];
+  }
+  return findSentUidsByEnvelope(client, new Set([wanted]));
+}
+
+export async function resolveSentUidsToTrash(
+  client: TrashImapClient,
+  smtpMessageIds: string[],
+): Promise<number[]> {
+  const found = new Set<number>();
+  const missing: string[] = [];
+  for (const smtpId of smtpMessageIds) {
+    const uids = await searchSentUidsByHeader(client, smtpId);
+    if (uids.length > 0) {
+      for (const uid of uids) {
+        found.add(uid);
+      }
+    } else if (normalizeMessageId(smtpId)) {
+      missing.push(smtpId);
+    }
+  }
+  if (missing.length > 0) {
+    const wanted = new Set(missing.map((id) => normalizeMessageId(id)));
+    for (const uid of await findSentUidsByEnvelope(client, wanted)) {
+      found.add(uid);
+    }
+  }
+  return Array.from(found);
+}
+
 export async function listInboxUids(client: TrashImapClient): Promise<Set<string>> {
-  const uids = asUidList(await client.search({ all: true }, { uid: true }));
+  const uids = asUidList(await client.search({ deleted: false }, { uid: true }));
   const set = new Set<string>();
   for (const uid of uids) {
     if (uid !== undefined && uid !== null && `${uid}`.length > 0) {
@@ -149,29 +214,33 @@ export async function withImapSession<T>(
   }
 }
 
+export async function trashMessagesOnClient(
+  client: TrashImapClient,
+  input: { inboxUids: string[]; smtpMessageIds: string[] },
+): Promise<void> {
+  const folders = resolveFolders(await client.list());
+  if (input.inboxUids.length > 0) {
+    await client.mailboxOpen("INBOX");
+    await moveUids(
+      client,
+      input.inboxUids.map((uid) => Number(uid)),
+      folders.trash,
+    );
+  }
+  if (input.smtpMessageIds.length > 0) {
+    await client.mailboxOpen(folders.sent);
+    const sentUids = await resolveSentUidsToTrash(client, input.smtpMessageIds);
+    await moveUids(client, sentUids, folders.trash);
+  }
+}
+
 export async function trashMailboxMessages(
   account: MailboxAccount,
   input: { inboxUids: string[]; smtpMessageIds: string[] },
 ): Promise<void> {
   try {
     await withImapSession(account, async (client) => {
-      const folders = resolveFolders(await client.list());
-      if (input.inboxUids.length > 0) {
-        await client.mailboxOpen("INBOX");
-        await moveUids(
-          client,
-          input.inboxUids.map((uid) => Number(uid)),
-          folders.trash,
-        );
-      }
-      if (input.smtpMessageIds.length > 0) {
-        await client.mailboxOpen(folders.sent);
-        const sentUids: number[] = [];
-        for (const smtpId of input.smtpMessageIds) {
-          sentUids.push(...(await searchSentUidsByMessageId(client, smtpId)));
-        }
-        await moveUids(client, sentUids, folders.trash);
-      }
+      await trashMessagesOnClient(client, input);
     });
   } catch (error) {
     if (error instanceof MailTrashError) {

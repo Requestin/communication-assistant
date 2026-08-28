@@ -46,6 +46,10 @@ describe("inbound UID reconcile", () => {
     expect(inboundRestoreIds(rows, new Set(["101", "103"]))).toEqual(["hidden-in"]);
   });
 
+  it("does not restore a hidden row whose UID is absent from the live inbox set", () => {
+    expect(inboundRestoreIds(rows, new Set(["101"]))).toEqual([]);
+  });
+
   it("does nothing when every live UID is still present", () => {
     expect(inboundHideIds(rows, new Set(["101", "102"]))).toEqual([]);
   });
