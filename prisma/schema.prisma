@@ -76,6 +76,7 @@ model Conversation {
   subject       String
   threadKey     String
   lastMessageAt DateTime
+  deletedAt     DateTime?
 
   manager  User      @relation(fields: [managerId], references: [id], onDelete: Cascade)
   client   Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
@@ -85,6 +86,7 @@ model Conversation {
 
   @@unique([managerId, clientId, threadKey])
   @@index([managerId, clientId])
+  @@index([deletedAt])
   @@map("conversations")
 }
 
@@ -101,6 +103,7 @@ model Message {
   gmailMessageId String?
   smtpMessageId  String?
   createdAt      DateTime          @default(now())
+  deletedAt      DateTime?
 
   conversation  Conversation   @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   qualityScore  QualityScore?
@@ -109,6 +112,7 @@ model Message {
 
   @@unique([toEmail, gmailUid])
   @@index([conversationId, sentAt])
+  @@index([conversationId, deletedAt])
   @@map("messages")
 }
 
@@ -122,10 +126,12 @@ model AiNote {
   payload        Json
   visibleToRoles String[]   @default(["manager", "chief"])
   createdAt      DateTime   @default(now())
+  deletedAt      DateTime?
 
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   message      Message?     @relation(fields: [messageId], references: [id], onDelete: SetNull)
 
+  @@index([conversationId, deletedAt])
   @@map("ai_notes")
 }
 

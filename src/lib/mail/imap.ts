@@ -4,6 +4,8 @@ import { ingestInbound, ingestLogLine } from "./ingest";
 import { parseEml } from "./parse";
 import { imapSettings, type MailboxAccount } from "./accounts";
 import { initialLastUid, newMailUidRange } from "./cursor";
+import { reconcileInboxAgainstUids, reconcileSentAgainstIds } from "./mailbox-sync";
+import { listInboxUids, listSentMessageIds, resolveFolders } from "./trash";
 
 type ConnectedBox = {
   account: MailboxAccount;
@@ -119,8 +121,38 @@ export async function pollMailbox(
     if (maxSeen > lastUid) {
       await saveCursor(prisma, userId, maxSeen);
     }
+
+    try {
+      const inboxUids = await listInboxUids(client);
+      const inbound = await reconcileInboxAgainstUids(prisma, userId, inboxUids);
+      if (inbound.hidden > 0 || inbound.restored > 0) {
+        console.info(
+          `[imap:${account.code}] inbox reconcile hidden=${inbound.hidden} restored=${inbound.restored}`,
+        );
+      }
+    } catch (error) {
+      console.error(`[imap:${account.code}] inbox reconcile ${safeError(error)}`);
+    }
   } finally {
     lock.release();
+  }
+
+  try {
+    const folders = resolveFolders(await client.list());
+    const sentLock = await client.getMailboxLock(folders.sent);
+    try {
+      const sentIds = await listSentMessageIds(client);
+      const outbound = await reconcileSentAgainstIds(prisma, userId, sentIds);
+      if (outbound.hidden > 0 || outbound.restored > 0) {
+        console.info(
+          `[imap:${account.code}] sent reconcile hidden=${outbound.hidden} restored=${outbound.restored}`,
+        );
+      }
+    } finally {
+      sentLock.release();
+    }
+  } catch (error) {
+    console.error(`[imap:${account.code}] sent reconcile ${safeError(error)}`);
   }
 
   return { account, client };

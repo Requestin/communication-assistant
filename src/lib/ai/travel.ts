@@ -218,8 +218,16 @@ export async function processSuggestTravel(
   prisma: PrismaClient,
   job: Pick<Job, "id" | "conversationId">,
 ): Promise<void> {
+  const conversation = await prisma.conversation.findUnique({
+    where: { id: job.conversationId },
+    select: { deletedAt: true },
+  });
+  if (conversation?.deletedAt) {
+    return;
+  }
+
   const messages = await prisma.message.findMany({
-    where: { conversationId: job.conversationId },
+    where: { conversationId: job.conversationId, deletedAt: null },
     orderBy: { sentAt: "asc" },
   });
   const thread = buildThreadPrompt(messages);

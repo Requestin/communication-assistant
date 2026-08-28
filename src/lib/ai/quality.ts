@@ -225,7 +225,7 @@ export async function processEvaluateQuality(
 
   const message = await prisma.message.findUnique({
     where: { id: job.messageId },
-    include: { conversation: { select: { managerId: true } } },
+    include: { conversation: { select: { managerId: true, deletedAt: true } } },
   });
   if (!message) {
     throw new Error("message not found");
@@ -240,7 +240,7 @@ export async function processEvaluateQuality(
   }
 
   const recent = await prisma.message.findMany({
-    where: { conversationId: message.conversationId },
+    where: { conversationId: message.conversationId, deletedAt: null },
     orderBy: { sentAt: "desc" },
     take: CONTEXT_MESSAGES,
   });
@@ -248,6 +248,7 @@ export async function processEvaluateQuality(
 
   const before = {
     conversationId: message.conversationId,
+    deletedAt: null,
     sentAt: { lt: message.sentAt },
   };
   const [priorOutbound, previous, lastInbound] = await Promise.all([
@@ -297,7 +298,7 @@ export async function processEvaluateQuality(
           showHint: score.showHint,
         },
       });
-      if (score.showHint) {
+      if (score.showHint && !message.conversation.deletedAt) {
         await tx.aiNote.create({
           data: {
             conversationId: message.conversationId,

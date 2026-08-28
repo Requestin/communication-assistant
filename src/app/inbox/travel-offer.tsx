@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/table";
 import type { InboxNoteDto } from "@/lib/inbox";
 import { formatTravelOfferInsertText } from "@/lib/travel/offer-text";
+import { ThreadDeleteButton } from "./delete-confirm";
 
 function asString(value: unknown): string {
   return typeof value === "string" ? value : "";
@@ -94,10 +95,14 @@ export function TravelOfferCard({
   note,
   canInsert,
   onInsert,
+  canDelete,
+  onDelete,
 }: {
   note: InboxNoteDto;
   canInsert: boolean;
   onInsert: (text: string) => void;
+  canDelete?: boolean;
+  onDelete?: () => void;
 }) {
   const summary = asString(note.payload.summary) || note.body;
   const packages = asPackages(note.payload.packages);
@@ -111,6 +116,11 @@ export function TravelOfferCard({
         <span className="rounded-full border border-primary/50 bg-background/40 px-2 py-0.5 text-[11px] tracking-wide text-primary">
           Только для сотрудников
         </span>
+        {canDelete ? (
+          <span className="ml-auto">
+            <ThreadDeleteButton label="Удалить подбор" onClick={() => onDelete?.()} />
+          </span>
+        ) : null}
       </div>
       {summary ? <p className="whitespace-pre-wrap text-sm">{summary}</p> : null}
       {packages.length > 0 ? (

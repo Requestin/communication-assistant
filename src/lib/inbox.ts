@@ -180,10 +180,12 @@ function toConversationDto(item: ConversationCard): InboxConversationDto {
   };
 }
 
+const live = { deletedAt: null as Date | null };
+
 const conversationCardInclude = {
   client: { select: { displayName: true, email: true } },
   manager: { select: { code: true, name: true } },
-  messages: { orderBy: { sentAt: "desc" as const }, take: 1 },
+  messages: { where: live, orderBy: { sentAt: "desc" as const }, take: 1 },
 };
 
 export async function buildInboxSnapshot(
@@ -198,7 +200,10 @@ export async function buildInboxSnapshot(
 ): Promise<InboxSnapshotDto> {
   const [conversations, managers] = await Promise.all([
     prisma.conversation.findMany({
-      where: options.managerId ? { managerId: options.managerId } : undefined,
+      where: {
+        deletedAt: null,
+        ...(options.managerId ? { managerId: options.managerId } : {}),
+      },
       orderBy: { lastMessageAt: "desc" },
       include: conversationCardInclude,
     }),
@@ -224,6 +229,7 @@ export async function buildInboxSnapshot(
   });
   if (
     !thread ||
+    thread.deletedAt ||
     (options.accessManagerId && thread.managerId !== options.accessManagerId)
   ) {
     return { conversations: conversationDtos, messages: [], notes: [], jobs: [], alerts: [], ...extras };
@@ -233,6 +239,7 @@ export async function buildInboxSnapshot(
     prisma.message.findMany({
       where: {
         conversationId: options.conversationId,
+        deletedAt: null,
         ...(options.since ? { createdAt: { gt: options.since } } : {}),
       },
       orderBy: { sentAt: "asc" },
@@ -240,6 +247,7 @@ export async function buildInboxSnapshot(
     prisma.aiNote.findMany({
       where: {
         conversationId: options.conversationId,
+        deletedAt: null,
         ...(options.since ? { createdAt: { gt: options.since } } : {}),
       },
       orderBy: { createdAt: "asc" },

@@ -18,6 +18,7 @@ import { nextInboxSelection } from "@/lib/inbox-selection";
 import { isNearBottom, scrollToEnd } from "@/lib/inbox-scroll";
 import { QualityNoteCard } from "./quality-note";
 import { TravelOfferCard } from "./travel-offer";
+import { DeleteConfirmDialog, ThreadDeleteButton } from "./delete-confirm";
 
 type InboxViewProps = {
   pollSeconds: number;
@@ -79,9 +80,33 @@ function buildTimeline(messages: InboxMessageDto[], notes: InboxNoteDto[]): Time
 const REPLY_MIN_PX = 64;
 const REPLY_MAX_PX = 224;
 
+type PendingDelete =
+  | { kind: "conversation"; id: string; title: string }
+  | { kind: "message"; id: string }
+  | { kind: "note"; id: string };
+
 function fitReplyHeight(el: HTMLTextAreaElement) {
   el.style.height = "0px";
   el.style.height = `${Math.min(Math.max(el.scrollHeight, REPLY_MIN_PX), REPLY_MAX_PX)}px`;
+}
+
+function deleteCopy(target: PendingDelete): { title: string; body: string } {
+  if (target.kind === "conversation") {
+    return {
+      title: "Удалить диалог?",
+      body: `«${target.title}» пропадёт из ленты, письма уйдут в Корзину Gmail.`,
+    };
+  }
+  if (target.kind === "message") {
+    return {
+      title: "Удалить письмо?",
+      body: "Исходящее пропадёт из ленты и уйдёт в Корзину Gmail.",
+    };
+  }
+  return {
+    title: "Удалить карточку?",
+    body: "Подсказка пропадёт из ленты. В почту это не попадёт.",
+  };
 }
 
 function inboxPagePath(managerCode?: string, conversationId?: string | null): string {
@@ -115,6 +140,8 @@ export function InboxView({
   const [sending, setSending] = useState(false);
   const [suggesting, setSuggesting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const canReply = role === "manager";
   const travelBusy =
     suggesting || jobs.some((job) => job.status === "pending" || job.status === "processing");
@@ -253,6 +280,51 @@ export function InboxView({
     router.replace(inboxPagePath(code || undefined, selectedId));
   }
 
+  async function confirmDelete() {
+    if (!pendingDelete || deleting) {
+      return;
+    }
+    setDeleting(true);
+    setError(null);
+    const target = pendingDelete;
+    const path =
+      target.kind === "conversation"
+        ? `/api/conversations/${target.id}`
+        : target.kind === "message"
+          ? `/api/conversations/${selectedId}/messages/${target.id}`
+          : `/api/conversations/${selectedId}/notes/${target.id}`;
+    try {
+      const response = await fetch(path, { method: "DELETE" });
+      const body = (await response.json().catch(() => ({}))) as { error?: string };
+      if (!response.ok) {
+        setError(body.error ?? "Не удалось удалить");
+        return;
+      }
+      setPendingDelete(null);
+      if (target.kind === "conversation") {
+        setConversations((current) => current.filter((item) => item.id !== target.id));
+        if (selectedId === target.id) {
+          setSelectedId(null);
+          setMessages([]);
+          setNotes([]);
+          setJobs([]);
+          setAlerts([]);
+          setOpenConversation(null);
+          router.replace(inboxPagePath(managerCode));
+        }
+      } else if (target.kind === "message") {
+        setMessages((current) => current.filter((item) => item.id !== target.id));
+      } else {
+        setNotes((current) => current.filter((item) => item.id !== target.id));
+      }
+      await load();
+    } catch {
+      setError("Не удалось удалить");
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   async function onSend() {
     if (!selected || !canReply || sending) {
       return;
@@ -375,13 +447,13 @@ export function InboxView({
               {conversations.map((item) => {
                 const active = item.id === selectedId;
                 return (
-                  <li key={item.id}>
+                  <li key={item.id} className="relative">
                     <button
                       type="button"
                       onClick={() => selectConversation(item.id)}
                       className={`pressable w-full rounded-lg px-3 py-2 text-left ${
-                        active ? "bg-accent ring-1 ring-primary/40" : "hover:bg-muted/50"
-                      }`}
+                        canReply ? "pr-10" : ""
+                      } ${active ? "bg-accent ring-1 ring-primary/40" : "hover:bg-muted/50"}`}
                     >
                       {role === "chief" && item.managerName ? (
                         <div className="truncate text-xs text-muted-foreground">{item.managerName}</div>
@@ -391,6 +463,20 @@ export function InboxView({
                       <div className="truncate text-xs text-muted-foreground">{item.preview}</div>
                       <div className="mt-1 text-xs text-muted-foreground">{formatTime(item.lastMessageAt)}</div>
                     </button>
+                    {canReply ? (
+                      <span className="absolute top-1.5 right-1.5">
+                        <ThreadDeleteButton
+                          label="Удалить диалог"
+                          onClick={() =>
+                            setPendingDelete({
+                              kind: "conversation",
+                              id: item.id,
+                              title: item.subject,
+                            })
+                          }
+                        />
+                      </span>
+                    ) : null}
                   </li>
                 );
               })}
@@ -453,9 +539,16 @@ export function InboxView({
                           note={item.note}
                           canInsert={canReply}
                           onInsert={insertOffer}
+                          canDelete={canReply}
+                          onDelete={() => setPendingDelete({ kind: "note", id: item.note.id })}
                         />
                       ) : (
-                        <QualityNoteCard key={item.id} note={item.note} />
+                        <QualityNoteCard
+                          key={item.id}
+                          note={item.note}
+                          canDelete={canReply}
+                          onDelete={() => setPendingDelete({ kind: "note", id: item.note.id })}
+                        />
                       )
                     ) : (
                       <article
@@ -466,9 +559,19 @@ export function InboxView({
                             : "bg-card"
                         }`}
                       >
-                        <div className="mb-2 text-xs text-muted-foreground">
-                          {item.message.direction === "outbound" ? "Исходящее" : "Входящее"} ·{" "}
-                          {item.message.subject} · {formatTime(item.message.sentAt)}
+                        <div className="mb-2 flex items-start gap-2 text-xs text-muted-foreground">
+                          <span className="min-w-0 flex-1">
+                            {item.message.direction === "outbound" ? "Исходящее" : "Входящее"} ·{" "}
+                            {item.message.subject} · {formatTime(item.message.sentAt)}
+                          </span>
+                          {canReply && item.message.direction === "outbound" ? (
+                            <ThreadDeleteButton
+                              label="Удалить письмо"
+                              onClick={() =>
+                                setPendingDelete({ kind: "message", id: item.message.id })
+                              }
+                            />
+                          ) : null}
                         </div>
                         <p className="whitespace-pre-wrap text-sm">{item.message.bodyText}</p>
                       </article>
@@ -550,6 +653,19 @@ export function InboxView({
           ) : null}
         </section>
       </div>
+      {pendingDelete ? (
+        <DeleteConfirmDialog
+          title={deleteCopy(pendingDelete).title}
+          body={deleteCopy(pendingDelete).body}
+          busy={deleting}
+          onCancel={() => {
+            if (!deleting) {
+              setPendingDelete(null);
+            }
+          }}
+          onConfirm={() => void confirmDelete()}
+        />
+      ) : null}
     </div>
   );
 }
