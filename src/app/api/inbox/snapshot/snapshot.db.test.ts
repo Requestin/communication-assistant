@@ -360,4 +360,86 @@ describe.skipIf(!prisma)("GET /api/inbox/snapshot", () => {
     ]);
     expect(JSON.stringify(body)).not.toMatch(/ECONNREFUSED|secret=/);
   });
+
+  it("omits hidden conversations and messages from the snapshot", async () => {
+    const live = await ingestInbound(prisma!, {
+      managerId: annaId,
+      managerEmail: "communicationassistant36@gmail.com",
+      gmailUid: "2501",
+      parsed: parseMailFields({
+        fromEmail: "imap-test-live@example.com",
+        fromName: "Живой",
+        subject: "Живая тема",
+        text: "Живое письмо",
+      }),
+    });
+    const hidden = await ingestInbound(prisma!, {
+      managerId: annaId,
+      managerEmail: "communicationassistant36@gmail.com",
+      gmailUid: "2502",
+      parsed: parseMailFields({
+        fromEmail: "imap-test-hidden@example.com",
+        fromName: "Скрытый",
+        subject: "Скрытая тема",
+        text: "Скрытое письмо",
+      }),
+    });
+    expect(live.status).toBe("created");
+    expect(hidden.status).toBe("created");
+    if (live.status !== "created" || hidden.status !== "created") {
+      return;
+    }
+
+    await prisma!.conversation.update({
+      where: { id: hidden.conversationId },
+      data: { deletedAt: new Date() },
+    });
+    await prisma!.message.update({
+      where: { id: hidden.messageId },
+      data: { deletedAt: new Date() },
+    });
+    await prisma!.message.create({
+      data: {
+        conversationId: live.conversationId,
+        direction: "outbound",
+        fromEmail: "communicationassistant36@gmail.com",
+        toEmail: "imap-test-live@example.com",
+        subject: "Re: Живая тема",
+        bodyText: "Скрытый исходящий",
+        sentAt: new Date(),
+        deletedAt: new Date(),
+      },
+    });
+
+    const cookie = cookieHeader(await loginAs(annaId));
+    const list = await snapshot(
+      new Request("http://127.0.0.1:3010/api/inbox/snapshot", { headers: { cookie } }),
+    );
+    const listBody = (await list.json()) as InboxSnapshotDto;
+    const emails = listBody.conversations.map((item) => item.clientEmail);
+    expect(emails).toContain("imap-test-live@example.com");
+    expect(emails).not.toContain("imap-test-hidden@example.com");
+    expect(listBody.conversations.find((item) => item.id === live.conversationId)?.preview).toBe(
+      "Живое письмо",
+    );
+
+    const thread = await snapshot(
+      new Request(
+        `http://127.0.0.1:3010/api/inbox/snapshot?conversationId=${live.conversationId}`,
+        { headers: { cookie } },
+      ),
+    );
+    const threadBody = (await thread.json()) as InboxSnapshotDto;
+    expect(threadBody.messages.map((item) => item.bodyText)).toEqual(["Живое письмо"]);
+
+    const hiddenThread = await snapshot(
+      new Request(
+        `http://127.0.0.1:3010/api/inbox/snapshot?conversationId=${hidden.conversationId}`,
+        { headers: { cookie } },
+      ),
+    );
+    const hiddenBody = (await hiddenThread.json()) as InboxSnapshotDto;
+    expect(hiddenBody.messages).toEqual([]);
+    expect(hiddenBody.openConversation).toBeUndefined();
+  });
 });

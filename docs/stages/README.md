@@ -28,6 +28,7 @@
 | 9.7. Стенд Docker + llama в tmux | `stage/09-7-docker-stand` | [09-7-docker-stand.md](09-7-docker-stand.md) | `up.sh` поднимает db/web/worker и модель в tmux; `down.sh` гасит это же |
 | 9.8. Убрать оговорки из UI | `stage/09-8-copy-cleanup` | [09-8-copy-cleanup.md](09-8-copy-cleanup.md) | Нет «учебные данные / не оферта» и лишних подписей в почте |
 | 9.9. Приветствие не в каждом письме | `stage/09-9-agent-hello-fix` | [09-9-agent-hello-fix.md](09-9-agent-hello-fix.md) | В активной ленте нет штрафа за отсутствие «здравствуйте» |
+| 10. Удаление писем и диалогов с Gmail | `stage/10-mail-delete-sync` | [10-mail-delete-sync.md](10-mail-delete-sync.md) | Gmail ↔ лента, главный без крестиков, цифры консоли не падают |
 
 ## Как агент ведёт этап
 

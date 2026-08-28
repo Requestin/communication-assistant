@@ -265,4 +265,41 @@ describe.skipIf(!prisma)("admin stats against Postgres", () => {
     expect(Array.isArray(body.charts.overallByDay)).toBe(true);
     expect(Array.isArray(body.charts.overallSeries)).toBe(true);
   });
+
+  it("does not drop replies, suggestions, AVG or hint rate after a soft hide", async () => {
+    const seeded = await seedScoredReply({
+      managerId: annaId,
+      managerEmail: annaEmail,
+      clientEmail: `${EMAIL_PREFIX}soft-hide@example.com`,
+      subject: "Сочи",
+      overall: 4,
+      showHint: true,
+      offer: true,
+    });
+    const beforeHide = await buildAdminStats(prisma!);
+    const at = new Date();
+    await prisma!.conversation.update({
+      where: { id: seeded.conversationId },
+      data: { deletedAt: at },
+    });
+    await prisma!.message.updateMany({
+      where: { conversationId: seeded.conversationId },
+      data: { deletedAt: at },
+    });
+    await prisma!.aiNote.updateMany({
+      where: { conversationId: seeded.conversationId },
+      data: { deletedAt: at },
+    });
+    const afterHide = await buildAdminStats(prisma!);
+    expect(afterHide.department.replies).toBe(beforeHide.department.replies);
+    expect(afterHide.department.suggestions).toBe(beforeHide.department.suggestions);
+    expect(afterHide.department.avgScore).toBe(beforeHide.department.avgScore);
+    expect(afterHide.department.hintRate).toBe(beforeHide.department.hintRate);
+    const annaBefore = beforeHide.managers.find((row) => row.code === "M36");
+    const annaAfter = afterHide.managers.find((row) => row.code === "M36");
+    expect(annaAfter?.replies).toBe(annaBefore?.replies);
+    expect(annaAfter?.suggestions).toBe(annaBefore?.suggestions);
+    expect(annaAfter?.avgScore).toBe(annaBefore?.avgScore);
+    expect(annaAfter?.hintRate).toBe(annaBefore?.hintRate);
+  });
 });

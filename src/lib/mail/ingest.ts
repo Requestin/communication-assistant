@@ -17,6 +17,7 @@ export type IngestInput = {
 
 export type IngestResult =
   | { status: "created"; messageId: string; conversationId: string; clientId: string }
+  | { status: "restored"; messageId: string; conversationId: string; clientId: string }
   | { status: "duplicate" }
   | { status: "skipped"; reason: "self" | "header" | "system" };
 
@@ -77,8 +78,34 @@ export async function ingestInbound(
           threadKey,
           lastMessageAt: sentAt,
         },
-        update: { subject, lastMessageAt },
+        update: { subject, lastMessageAt, deletedAt: null },
       });
+
+      const existingMessage = await tx.message.findUnique({
+        where: { toEmail_gmailUid: { toEmail, gmailUid: input.gmailUid } },
+      });
+      if (existingMessage) {
+        if (!existingMessage.deletedAt) {
+          return { status: "duplicate" as const };
+        }
+        await tx.message.update({
+          where: { id: existingMessage.id },
+          data: {
+            deletedAt: null,
+            bodyText: input.parsed.bodyText,
+            subject,
+            sentAt,
+            gmailMessageId: input.parsed.gmailMessageId,
+            conversationId: conversation.id,
+          },
+        });
+        return {
+          status: "restored" as const,
+          messageId: existingMessage.id,
+          conversationId: conversation.id,
+          clientId: client.id,
+        };
+      }
 
       const message = await tx.message.create({
         data: {
@@ -115,6 +142,9 @@ export function ingestLogLine(input: IngestInput, result: IngestResult): string 
   const preview = clipBody(input.parsed.bodyText);
   if (result.status === "created") {
     return `inbound uid=${input.gmailUid} from=${from} subject=${subject} preview=${preview}`;
+  }
+  if (result.status === "restored") {
+    return `restored uid=${input.gmailUid} from=${from} subject=${subject}`;
   }
   if (result.status === "duplicate") {
     return `skip duplicate uid=${input.gmailUid} from=${from}`;

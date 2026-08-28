@@ -1,4 +1,5 @@
 import type { InboxNoteDto } from "@/lib/inbox";
+import { ThreadDeleteButton } from "./delete-confirm";
 
 function formatScore(value: number | null): string {
   if (value === null) {
@@ -15,7 +16,15 @@ function ScorePill({ label, value }: { label: string; value: number | null }) {
   );
 }
 
-export function QualityNoteCard({ note }: { note: InboxNoteDto }) {
+export function QualityNoteCard({
+  note,
+  canDelete,
+  onDelete,
+}: {
+  note: InboxNoteDto;
+  canDelete?: boolean;
+  onDelete?: () => void;
+}) {
   return (
     <article className="w-full rounded-xl border border-primary/45 bg-primary/12 px-4 py-3 shadow-[inset_0_1px_0_oklch(0.78_0.12_75_/_0.12)]">
       <div className="mb-2 flex flex-wrap items-center gap-2">
@@ -23,6 +32,11 @@ export function QualityNoteCard({ note }: { note: InboxNoteDto }) {
         <span className="rounded-full border border-primary/50 bg-background/40 px-2 py-0.5 text-[11px] tracking-wide text-primary">
           Только для сотрудников
         </span>
+        {canDelete ? (
+          <span className="ml-auto">
+            <ThreadDeleteButton label="Удалить подсказку" onClick={() => onDelete?.()} />
+          </span>
+        ) : null}
       </div>
       {note.body ? <p className="whitespace-pre-wrap text-sm">{note.body}</p> : null}
       {note.issues.length > 0 ? (

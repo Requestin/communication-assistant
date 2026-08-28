@@ -211,4 +211,47 @@ describe.skipIf(!prisma)("ingest inbound mail", () => {
     });
     expect(tomsk?.conversationId).not.toBe(first.conversationId);
   });
+
+  it("restores a hidden letter with the same uid instead of treating it as a duplicate", async () => {
+    const parsed = await parseEml(readFileSync(path.join(fixtures, "inbound-plain.eml")));
+    const first = await ingestInbound(prisma!, {
+      managerId: annaId,
+      managerEmail,
+      gmailUid: "1030",
+      parsed,
+    });
+    expect(first.status).toBe("created");
+    if (first.status !== "created") {
+      return;
+    }
+
+    await prisma!.message.update({
+      where: { id: first.messageId },
+      data: { deletedAt: new Date() },
+    });
+    await prisma!.conversation.update({
+      where: { id: first.conversationId },
+      data: { deletedAt: new Date() },
+    });
+
+    const again = await ingestInbound(prisma!, {
+      managerId: annaId,
+      managerEmail,
+      gmailUid: "1030",
+      parsed,
+    });
+    expect(again.status).toBe("restored");
+    if (again.status !== "restored") {
+      return;
+    }
+    expect(again.messageId).toBe(first.messageId);
+    expect(again.conversationId).toBe(first.conversationId);
+
+    const message = await prisma!.message.findUnique({ where: { id: first.messageId } });
+    const conversation = await prisma!.conversation.findUnique({
+      where: { id: first.conversationId },
+    });
+    expect(message?.deletedAt).toBeNull();
+    expect(conversation?.deletedAt).toBeNull();
+  });
 });
